@@ -53,7 +53,7 @@ namespace HangingWoman
                 }
             }
 
-            return Finish("Rain Loop", CrossfadeLoop(data, fade), 0.7f);
+            return Finish("Rain Loop", CrossfadeLoop(data, fade), 0.7f, loop: true);
         }
 
         /// <summary>A crack followed by a long rolling rumble.</summary>
@@ -133,7 +133,8 @@ namespace HangingWoman
             var data = RopeFriction(seed, seconds, t =>
             {
                 // One smooth swell (no dips to silence), wavering a little in strength.
-                float swell = Mathf.Pow(Mathf.Sin(t * Mathf.PI), 0.7f);
+                // sin(π) rounds to a tiny negative number; a fractional power of that is NaN.
+                float swell = Mathf.Pow(Mathf.Max(0f, Mathf.Sin(t * Mathf.PI)), 0.7f);
                 return swell * (0.8f + 0.2f * Mathf.Sin(t * seconds * 2f * Mathf.PI * 1.7f));
             });
             return Finish("Rope Creak " + seed, data, 0.8f);
@@ -149,7 +150,7 @@ namespace HangingWoman
             float total = seconds + fade / (float)SampleRate;
             // Whole number of tension cycles over the loop so it joins up.
             var data = RopeFriction(seed, total, t => 0.65f + 0.35f * Mathf.Sin(t * total / seconds * 2f * Mathf.PI * 3f));
-            return Finish("Rope Strain Loop " + seed, CrossfadeLoop(data, fade), 0.7f);
+            return Finish("Rope Strain Loop " + seed, CrossfadeLoop(data, fade), 0.7f, loop: true);
         }
 
         /// <summary>
@@ -222,12 +223,24 @@ namespace HangingWoman
             return result;
         }
 
-        static AudioClip Finish(string name, float[] data, float peak)
+        static AudioClip Finish(string name, float[] data, float peak, bool loop = false)
         {
+            // A single NaN or infinite sample reaching the audio device can make it buzz,
+            // even for other apps sharing it. Never let one through.
+            for (int i = 0; i < data.Length; i++)
+                if (float.IsNaN(data[i]) || float.IsInfinity(data[i])) data[i] = 0f;
+
             float max = 0.0001f;
             for (int i = 0; i < data.Length; i++) max = Mathf.Max(max, Mathf.Abs(data[i]));
             float gain = peak / max;
-            for (int i = 0; i < data.Length; i++) data[i] *= gain;
+
+            // Short fades so one-shots never start or stop on a click (loops are already seamless).
+            int fade = loop ? 0 : Mathf.Min(data.Length / 4, 220);
+            for (int i = 0; i < data.Length; i++)
+            {
+                float edge = fade == 0 ? 1f : Mathf.Min(1f, Mathf.Min(i, data.Length - 1 - i) / (float)fade);
+                data[i] = Mathf.Clamp(data[i] * gain * edge, -1f, 1f);
+            }
 
             var clip = AudioClip.Create(name, data.Length, 1, SampleRate, false);
             clip.SetData(data, 0);

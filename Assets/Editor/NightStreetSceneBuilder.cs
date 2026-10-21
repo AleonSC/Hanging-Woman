@@ -28,7 +28,7 @@ namespace HangingWoman.EditorTools
         const string SceneDir = Root + "/Scenes";
         public const string ScenePath = SceneDir + "/NightStreet.unity";
         /// <summary>Bump whenever the builder changes what it builds, so stale scenes get rebuilt.</summary>
-        public const int SceneVersion = 10;
+        public const int SceneVersion = 11;
         public static string VersionKey => "HangingWoman.SceneVersion." + Application.dataPath;
         public static bool SceneIsCurrent => File.Exists(ScenePath) && EditorPrefs.GetInt(VersionKey, 0) == SceneVersion;
 

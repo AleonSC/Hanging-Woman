@@ -28,7 +28,7 @@ namespace HangingWoman.EditorTools
         static readonly Vector2 EyeOffset = new Vector2(0.031f, 0.014f);
         const float EyeRadius = 0.012f;
 
-        static Material skinFace, skinBody, skinLivid, skinNeck, eyes, hairMat;
+        static Material skinFace, skinBody, skinLivid, skinNeck, eyes, hairMat, dressCloth;
 
         static void CreateWomanMaterials()
         {
@@ -45,8 +45,23 @@ namespace HangingWoman.EditorTools
                 (x, y) => NeckColor((x + 0.5f) / 256f, (y + 0.5f) / 256f), false, TextureWrapMode.Clamp));
             eyes = Mat("Eyes Clouded", Color.white, 0.9f, 0f, tex: SaveTexture("eye_clouded", 256,
                 (x, y) => EyeColor((x + 0.5f) / 128f - 1f, (y + 0.5f) / 128f - 1f), false, TextureWrapMode.Clamp));
-            hairMat = Cutout(Mat("Hair Wet Black", Color.white, 0.72f, 0f, tex: SaveTexture("hair_strands", 256,
-                (x, y) => HairColor((x + 0.5f) / 256f, (y + 0.5f) / 256f), true, TextureWrapMode.Clamp, preserveCoverage: true)), 0.45f);
+            hairMat = DrawBothSides(Cutout(Mat("Hair Wet Black", Color.white, 0.72f, 0f, tex: SaveTexture("hair_strands", 256,
+                (x, y) => HairColor((x + 0.5f) / 256f, (y + 0.5f) / 256f), true, TextureWrapMode.Clamp, preserveCoverage: true)), 0.45f));
+            dressCloth = DrawBothSides(Mat("Dress Cloth", new Color(0.86f, 0.84f, 0.8f), 0.4f, 0f, tex: (Texture2D)dress.mainTexture));
+        }
+
+        /// <summary>
+        /// Cloth must be single-sided: Unity recomputes cloth normals from its triangles every
+        /// frame, and back faces sharing the same vertices cancel them out, giving black
+        /// blotches. Instead the material draws both sides (URP); the built-in Standard shader
+        /// can't, so there the cloth only shows from outside.
+        /// </summary>
+        static Material DrawBothSides(Material m)
+        {
+            if (m.HasProperty("_Cull")) m.SetFloat("_Cull", 0f);
+            m.doubleSidedGI = true;
+            UnityEditor.EditorUtility.SetDirty(m);
+            return m;
         }
 
         // ================================================================== Body assembly
@@ -74,7 +89,7 @@ namespace HangingWoman.EditorTools
             // Skirt: cloth pinned at the waist, colliding with her legs and hips.
             var skirt = new SkinBuilder(1);
             BuildSkirt(skirt);
-            var skirtRenderer = Skin("Skirt (Cloth)", ragdoll, skirt.ToMesh("Woman Skirt"), bones, new[] { dress });
+            var skirtRenderer = Skin("Skirt (Cloth)", ragdoll, skirt.ToMesh("Woman Skirt"), bones, new[] { dressCloth });
             var legColliders = new List<CapsuleCollider> { bones[BPelvis].GetComponent<CapsuleCollider>() };
             for (int i = 0; i < 2; i++)
             {
@@ -600,7 +615,7 @@ namespace HangingWoman.EditorTools
                     float t = i / (float)rows;
                     return 1f + t * (0.05f * Mathf.Sin(a * 7f + t * 2f) + 0.025f * Mathf.Sin(a * 13f));
                 },
-                doubleSided: true,
+                doubleSided: false, // see DrawBothSides
                 offset: (i, a) => i == rows ? Vector3.down * hem[Mathf.RoundToInt(a / (Mathf.PI * 2f) * segments)] : Vector3.zero,
                 pin: i => i <= 1 ? 0f : (i / (float)rows - 0.06f) * 0.7f);
         }
@@ -646,7 +661,7 @@ namespace HangingWoman.EditorTools
                     b.Add(c - across * halfWidth, new Vector2(0f, t), w, pin);
                     b.Add(c + across * halfWidth, new Vector2(1f, t), w, pin);
                 }
-                b.Grid(start, segs + 1, 2, 0, doubleSided: true);
+                b.Grid(start, segs + 1, 2, 0); // single-sided, see DrawBothSides
             }
         }
 
