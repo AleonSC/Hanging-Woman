@@ -28,7 +28,7 @@ namespace HangingWoman.EditorTools
         const string SceneDir = Root + "/Scenes";
         public const string ScenePath = SceneDir + "/NightStreet.unity";
         /// <summary>Bump whenever the builder changes what it builds, so stale scenes get rebuilt.</summary>
-        public const int SceneVersion = 8;
+        public const int SceneVersion = 9;
         public static string VersionKey => "HangingWoman.SceneVersion." + Application.dataPath;
         public static bool SceneIsCurrent => File.Exists(ScenePath) && EditorPrefs.GetInt(VersionKey, 0) == SceneVersion;
 
@@ -139,13 +139,32 @@ namespace HangingWoman.EditorTools
             BuildWeather(player.transform, sky);
             BuildHangingWoman(player.GetComponent<FirstPersonController>());
             new GameObject("Game Settings").AddComponent<QualityBootstrap>();
+            if (urp) ScaleLightsForUrp();
 
             AssetDatabase.SaveAssets();
             if (!EditorSceneManager.SaveScene(scene, ScenePath)) throw new IOException("Could not save " + ScenePath);
             EditorPrefs.SetInt(VersionKey, SceneVersion);
             AddSceneToBuildSettings();
             Selection.activeGameObject = player;
-            Debug.Log($"[Hanging Woman] Built and saved {ScenePath} ({(urp ? "URP" : "Built-in")} materials). Press Play to walk.");
+            Debug.Log($"[Hanging Woman] Built and saved {ScenePath} (scene version {SceneVersion}, {(urp ? "URP" : "Built-in render pipeline")}). Press Play to walk.");
+        }
+
+        /// <summary>
+        /// Light values here are tuned for the built-in pipeline, whose point and spot lights
+        /// stay bright until near the edge of their range. URP lights fall off with the square
+        /// of distance instead, so at the same intensity a street lamp barely reaches the
+        /// ground. Boost them to give roughly the same brightness at a typical viewing distance
+        /// (about 40% of each light's range).
+        /// </summary>
+        static void ScaleLightsForUrp()
+        {
+            foreach (var light in Object.FindObjectsByType<Light>(FindObjectsSortMode.None))
+            {
+                if (light.type != LightType.Point && light.type != LightType.Spot) continue;
+                float d = light.range * 0.4f;
+                float builtInFalloff = 1f / (1f + 25f * 0.16f);
+                light.intensity *= Mathf.Max(1f, builtInFalloff * d * d);
+            }
         }
 
         // ------------------------------------------------------------------ Render settings
@@ -1819,13 +1838,15 @@ namespace HangingWoman.EditorTools
     }
 
     /// <summary>
-    /// Builds the scene the first time the project is opened. If the scene was built by an
-    /// older version of the builder, it says so (without blocking the editor) instead of
-    /// rebuilding over it.
+    /// Keeps the scene in step with the builder: builds it the first time the project is
+    /// opened, and rebuilds it automatically whenever the builder has changed since it was
+    /// last built (e.g. after pulling an update). The previous scene is kept as a backup.
     /// </summary>
     [InitializeOnLoad]
     static class NightStreetAutoBuild
     {
+        const string BackupPath = "Assets/Scenes/NightStreet (Previous Build).unity";
+
         static NightStreetAutoBuild()
         {
             EditorApplication.delayCall += Check;
@@ -1833,17 +1854,18 @@ namespace HangingWoman.EditorTools
 
         static void Check()
         {
-            if (EditorApplication.isPlayingOrWillChangePlaymode || NightStreetSceneBuilder.SceneIsCurrent) return;
+            if (EditorApplication.isPlayingOrWillChangePlaymode || EditorApplication.isCompiling) return;
+            if (NightStreetSceneBuilder.SceneIsCurrent) return;
 
-            if (!File.Exists(NightStreetSceneBuilder.ScenePath))
+            if (File.Exists(NightStreetSceneBuilder.ScenePath))
             {
-                NightStreetSceneBuilder.Build();
-                return;
+                AssetDatabase.DeleteAsset(BackupPath);
+                AssetDatabase.CopyAsset(NightStreetSceneBuilder.ScenePath, BackupPath);
+                Debug.Log("[Hanging Woman] Scene builder was updated, rebuilding NightStreet. The old scene was kept as " + BackupPath);
             }
 
-            const string message = "NightStreet is out of date. Run Hanging Woman > Build Night Street Scene to update it.";
-            Debug.LogWarning("[Hanging Woman] " + message);
-            SceneView.lastActiveSceneView?.ShowNotification(new GUIContent(message), 8.0);
+            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+            NightStreetSceneBuilder.Build();
         }
     }
 }
