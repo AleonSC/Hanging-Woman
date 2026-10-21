@@ -27,6 +27,10 @@ namespace HangingWoman.EditorTools
         const string MeshDir = Root + "/Generated/Meshes";
         const string SceneDir = Root + "/Scenes";
         public const string ScenePath = SceneDir + "/NightStreet.unity";
+        /// <summary>Bump whenever the builder changes what it builds, so stale scenes get rebuilt.</summary>
+        public const int SceneVersion = 6;
+        public static string VersionKey => "HangingWoman.SceneVersion." + Application.dataPath;
+        public static bool SceneIsCurrent => File.Exists(ScenePath) && EditorPrefs.GetInt(VersionKey, 0) == SceneVersion;
 
         const float StreetStart = -24f;
         const float StreetEnd = 144f;
@@ -51,7 +55,7 @@ namespace HangingWoman.EditorTools
 
         // Shared materials
         static Material asphalt, sidewalk, curb, roadPaint, trim, windowDark, windowWarm, windowCool, windowTv;
-        static Material shutterMetal, doorWood, lampPole, lampHead, puddle, alleyGround, dumpsterGreen, trashBag;
+        static Material shutterMetal, doorWood, lampPole, lampHead, lampHeadOff, puddle, alleyGround, dumpsterGreen, trashBag;
         static Material cardboard, pipeMetal, carGlass, tire, hydrantRed, alleyLampMat;
         static Material bloodDrop, bloodSplat, bloodSmear, bloodPool;
         static Material skin, dress, hair, rope, ropeKnot, socket;
@@ -72,6 +76,34 @@ namespace HangingWoman.EditorTools
         }
 
         public static void Build()
+        {
+            try
+            {
+                BuildScene();
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+                EditorUtility.DisplayDialog("Hanging Woman",
+                    "Building the scene failed, so it was not saved:\n\n" + e.Message + "\n\nSee the Console for details.", "OK");
+            }
+        }
+
+        [MenuItem("Hanging Woman/Find Hanging Woman", priority = 20)]
+        public static void FindWoman()
+        {
+            var woman = GameObject.Find("Hanging Woman");
+            if (woman == null)
+            {
+                if (EditorUtility.DisplayDialog("Hanging Woman", "She isn't in the open scene. It's probably an old build of NightStreet.", "Rebuild Now", "Cancel"))
+                    BuildFromMenu();
+                return;
+            }
+            Selection.activeGameObject = woman;
+            SceneView.lastActiveSceneView?.FrameSelected();
+        }
+
+        static void BuildScene()
         {
             rng = new System.Random(1971);
             decalIndex = 0;
@@ -109,7 +141,8 @@ namespace HangingWoman.EditorTools
             new GameObject("Game Settings").AddComponent<QualityBootstrap>();
 
             AssetDatabase.SaveAssets();
-            EditorSceneManager.SaveScene(scene, ScenePath);
+            if (!EditorSceneManager.SaveScene(scene, ScenePath)) throw new IOException("Could not save " + ScenePath);
+            EditorPrefs.SetInt(VersionKey, SceneVersion);
             AddSceneToBuildSettings();
             Selection.activeGameObject = player;
             Debug.Log($"[Hanging Woman] Built and saved {ScenePath} ({(urp ? "URP" : "Built-in")} materials). Press Play to walk.");
@@ -393,57 +426,45 @@ namespace HangingWoman.EditorTools
 
         static void BuildStreetLamps(Transform parent)
         {
+            // Every lamp on the street is dead except the one at the alley mouth.
             for (float z = 6f; z < 130f; z += 16f)
-                StreetLamp(parent, 1, z, Mathf.Approximately(z, 102f) ? LightFlicker.Mode.Broken : LightFlicker.Mode.Steady);
+                StreetLamp(parent, 1, z, lit: false);
             for (float z = 14f; z < 130f; z += 16f)
             {
-                // The lamp that would stand at the alley mouth is replaced by the featured one below.
+                // The lamp that would stand at the alley mouth is replaced by the lit one below.
                 if (Mathf.Abs(z - (AlleyZMin + AlleyZMax) * 0.5f) < 4f) continue;
-                StreetLamp(parent, -1, z, Mathf.Approximately(z, 94f) ? LightFlicker.Mode.Broken : LightFlicker.Mode.Steady);
+                StreetLamp(parent, -1, z, lit: false);
             }
 
             // Steady, bright lamp just south of the alley mouth, aimed so its pool of light
             // falls across the blood trails where they cross the sidewalk.
-            StreetLamp(parent, AlleySide, AlleyZMin - 1.6f, LightFlicker.Mode.Steady, featured: true);
+            StreetLamp(parent, AlleySide, AlleyZMin - 1.6f, lit: true);
         }
 
-        static void StreetLamp(Transform parent, int side, float z, LightFlicker.Mode mode, bool featured = false)
+        static void StreetLamp(Transform parent, int side, float z, bool lit)
         {
-            var lamp = Group($"Street Lamp {(side > 0 ? "E" : "W")} z{z:0}", parent);
+            var lamp = Group(lit ? "Street Lamp (Alley Mouth, Lit)" : $"Street Lamp {(side > 0 ? "E" : "W")} z{z:0} (Off)", parent);
             float x = side * (RoadHalfWidth + 0.6f);
             Prim(PrimitiveType.Cylinder, "Pole", lamp, new Vector3(x, SidewalkTop + 3f, z), new Vector3(0.14f, 3f, 0.14f), lampPole);
             Prim(PrimitiveType.Cylinder, "Base", lamp, new Vector3(x, SidewalkTop + 0.3f, z), new Vector3(0.26f, 0.3f, 0.26f), lampPole);
             Box("Arm", lamp, new Vector3(x - side * 0.7f, SidewalkTop + 6.05f, z), new Vector3(1.5f, 0.09f, 0.09f), lampPole, collider: false);
-            var head = Box("Head", lamp, new Vector3(x - side * 1.4f, SidewalkTop + 5.95f, z), new Vector3(0.65f, 0.16f, 0.35f), lampHead, collider: false);
+            var head = Box("Head", lamp, new Vector3(x - side * 1.4f, SidewalkTop + 5.95f, z), new Vector3(0.65f, 0.16f, 0.35f),
+                lit ? lampHead : lampHeadOff, collider: false);
             NoShadows(head);
+            if (!lit) return;
 
             var spot = new GameObject("Lamp Light").AddComponent<Light>();
             spot.transform.SetParent(lamp, false);
             spot.transform.localPosition = new Vector3(x - side * 1.4f, SidewalkTop + 5.8f, z);
-            spot.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            spot.transform.localRotation = Quaternion.Euler(78f, 0f, 0f); // tipped toward the alley
             spot.type = LightType.Spot;
-            spot.spotAngle = 115f;
-            spot.range = 14f;
-            spot.intensity = 2.6f;
+            spot.spotAngle = 120f;
+            spot.range = 16f;
+            spot.intensity = 3.6f;
             spot.color = Sodium;
-            spot.shadows = LightShadows.None;
+            spot.shadows = LightShadows.Soft;
+            spot.shadowStrength = 0.8f;
             spot.lightmapBakeType = LightmapBakeType.Realtime;
-            if (featured)
-            {
-                lamp.name = "Street Lamp (Alley Mouth)";
-                spot.transform.localRotation = Quaternion.Euler(78f, 0f, 0f); // tipped toward the alley
-                spot.spotAngle = 120f;
-                spot.range = 16f;
-                spot.intensity = 3.6f;
-                spot.shadows = LightShadows.Soft;
-                spot.shadowStrength = 0.8f;
-            }
-
-            if (mode != LightFlicker.Mode.Steady)
-            {
-                var f = Flicker(lamp.gameObject, mode, new[] { spot }, new Renderer[] { head.GetComponent<Renderer>() });
-                f.emissionColor = Sodium * 2f;
-            }
         }
 
         // ------------------------------------------------------------------ Alley
@@ -1056,6 +1077,7 @@ namespace HangingWoman.EditorTools
             doorWood = Mat("Door Dark", new Color(0.06f, 0.04f, 0.03f), 0.5f);
             lampPole = Mat("Lamp Pole", new Color(0.06f, 0.07f, 0.06f), 0.6f, 0.8f);
             lampHead = Mat("Lamp Head", new Color(0.3f, 0.2f, 0.1f), 0.7f, 0f, Sodium, 2f);
+            lampHeadOff = Mat("Lamp Head Off", new Color(0.04f, 0.035f, 0.03f), 0.85f, 0.1f);
             alleyLampMat = Mat("Alley Lamp", new Color(0.3f, 0.35f, 0.3f), 0.7f, 0f, new Color(0.75f, 0.85f, 0.75f), 1.5f);
             puddle = Mat("Puddle", new Color(0.01f, 0.011f, 0.014f), 0.985f, 0f);
             dumpsterGreen = Mat("Dumpster", new Color(0.05f, 0.14f, 0.07f), 0.6f, 0.5f);
@@ -1562,22 +1584,40 @@ namespace HangingWoman.EditorTools
         }
     }
 
-    /// <summary>Builds the scene automatically the first time the project is opened.</summary>
+    /// <summary>
+    /// Builds the scene the first time the project is opened, and offers to rebuild it whenever
+    /// the builder has changed since the scene was last built (e.g. after pulling an update).
+    /// </summary>
     [InitializeOnLoad]
     static class NightStreetAutoBuild
     {
-        const string SessionKey = "HangingWoman.AutoBuildChecked";
+        const string DeclinedKey = "HangingWoman.DeclinedRebuildVersion";
 
         static NightStreetAutoBuild()
         {
-            if (SessionState.GetBool(SessionKey, false)) return;
-            SessionState.SetBool(SessionKey, true);
-            EditorApplication.delayCall += () =>
+            EditorApplication.delayCall += Check;
+        }
+
+        static void Check()
+        {
+            if (EditorApplication.isPlayingOrWillChangePlaymode || NightStreetSceneBuilder.SceneIsCurrent) return;
+
+            if (File.Exists(NightStreetSceneBuilder.ScenePath))
             {
-                if (EditorApplication.isPlayingOrWillChangePlaymode || File.Exists(NightStreetSceneBuilder.ScenePath)) return;
-                if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
-                NightStreetSceneBuilder.Build();
-            };
+                if (SessionState.GetInt(DeclinedKey, 0) == NightStreetSceneBuilder.SceneVersion) return;
+                bool rebuild = EditorUtility.DisplayDialog("Hanging Woman",
+                    "The NightStreet scene was built by an older version of the scene builder, so it is missing recent changes.\n\n" +
+                    "Rebuild it now? (This replaces the scene.)", "Rebuild", "Later");
+                if (!rebuild)
+                {
+                    SessionState.SetInt(DeclinedKey, NightStreetSceneBuilder.SceneVersion);
+                    Debug.LogWarning("[Hanging Woman] NightStreet is out of date. Use Hanging Woman > Build Night Street Scene to update it.");
+                    return;
+                }
+            }
+
+            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+            NightStreetSceneBuilder.Build();
         }
     }
 }

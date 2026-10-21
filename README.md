@@ -13,6 +13,9 @@ At the end of the alley a woman hangs from a rope that rises into the sky, her b
 2. When the project first opens, the scene builds itself and is saved to
    `Assets/Scenes/NightStreet.unity`.
    You can rebuild it at any time with **Hanging Woman → Build Night Street Scene**.
+   If you pull an update while the project already has a scene, Unity offers to rebuild it,
+   because an old scene won't include the new changes. **Hanging Woman → Find Hanging Woman**
+   selects her in the Scene view, and offers a rebuild if she's missing.
 3. Press **Play**.
 
 Everything is made from primitives, generated textures and generated audio, so there are no
@@ -37,7 +40,8 @@ Gamepad works too if the project uses the new Input System.
 ## What's in the scene
 
 - **The street:** a wet asphalt road with sidewalks, curbs, lane paint, puddles, parked cars,
-  hydrants, and sodium street lamps.
+  hydrants, and a row of dead street lamps. The only one still working stands at the alley
+  mouth.
 - **The businesses:** a laundromat, a noodle bar, a pawn shop, a 24HR pharmacy, a liquor
   store, a hotel and more. Each has neon signs that flicker or buzz, lit or shuttered windows,
   awnings, and light spilling onto the pavement. The upper floors have scattered lit
@@ -46,7 +50,7 @@ Gamepad works too if the project uses the new Input System.
   including on awnings, cars and the dumpster. You also get a looping rain sound, occasional
   lightning and rolling thunder, and dense fog.
 - **The blood trails:** two parallel drag marks, about heel-width apart, start at a pool in
-  the west lane. They cross the curb and sidewalk under a bright street lamp at the alley mouth,
+  the west lane. They cross the curb and sidewalk under the one working street lamp,
   then run past the dumpster to a second pool by the back door, with a smear down the wall.
 - **The alley:** on the left (west) side, about halfway down the street. It has a dumpster, trash bags, boxes, pipes and a buzzing caged wall lamp.
   `Alley Trigger` slows the player while they're inside and has `onPlayerEnter` /
