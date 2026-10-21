@@ -28,7 +28,7 @@ namespace HangingWoman.EditorTools
         const string SceneDir = Root + "/Scenes";
         public const string ScenePath = SceneDir + "/NightStreet.unity";
         /// <summary>Bump whenever the builder changes what it builds, so stale scenes get rebuilt.</summary>
-        public const int SceneVersion = 11;
+        public const int SceneVersion = 12;
         public static string VersionKey => "HangingWoman.SceneVersion." + Application.dataPath;
         public static bool SceneIsCurrent => File.Exists(ScenePath) && EditorPrefs.GetInt(VersionKey, 0) == SceneVersion;
 
@@ -140,6 +140,8 @@ namespace HangingWoman.EditorTools
             BuildHangingWoman(player.GetComponent<FirstPersonController>());
             new GameObject("Game Settings").AddComponent<QualityBootstrap>();
             if (urp) ScaleLightsForUrp();
+            // Cutscenes made from recordings live as assets, so they come back after a rebuild.
+            CutsceneTools.AddAllToScene();
 
             AssetDatabase.SaveAssets();
             if (!EditorSceneManager.SaveScene(scene, ScenePath)) throw new IOException("Could not save " + ScenePath);
@@ -1169,6 +1171,9 @@ namespace HangingWoman.EditorTools
             fpc.cameraRoot = root;
             fpc.playerCamera = cam;
             fpc.flashlight = flash;
+
+            // R records the camera for cutscenes (Hanging Woman > Cutscenes).
+            player.AddComponent<CameraRecorder>().targetCamera = cam;
             return player;
         }
 

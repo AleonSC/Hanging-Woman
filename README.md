@@ -38,6 +38,34 @@ just run the build menu again.
 
 Gamepad works too if the project uses the new Input System.
 
+## Recording cutscenes
+
+You can record your own camera moves in Play mode and replay them as cutscenes.
+
+| Input | Action |
+| --- | --- |
+| R | Start / stop recording |
+| M | Drop a marker (while recording) |
+| Scroll wheel | Smooth zoom in and out (while recording) |
+| P | Play the newest cutscene |
+| Space / Enter | Skip a playing cutscene |
+
+1. Press Play, then **R**. A red **REC** appears at the top left. Walk, look around and zoom,
+   then press **R** again. The take is saved to `Assets/Recordings/take_01.json` (then
+   `take_02`, and so on). If you leave Play mode while recording, the take is saved too.
+2. Choose **Hanging Woman → Cutscenes → Create Cutscene From Latest Recording**. You can also
+   right-click any recording and choose **Hanging Woman → Create Cutscene From Recording**.
+   This creates `Assets/Cutscenes/take_01.asset` and its camera clip `take_01.anim`, and adds
+   a `Cutscene take_01` camera to the scene.
+3. Press Play, then **P** to watch it.
+
+Select the cutscene asset to change how much the path is smoothed (0 keeps every hand-held
+wobble), then click **Rebuild Camera Path**. The `.anim` clip can also be edited by hand in
+the Animation window. Each marker fires the `onMarker` event on its `CutscenePlayer` with
+the marker's label. You can start a cutscene from any event by calling `CutscenePlayer.Play`,
+for example from the Alley Trigger's `onPlayerEnter`. Cutscenes are kept when the scene
+rebuilds itself.
+
 ## What's in the scene
 
 - **The street:** a wet asphalt road with sidewalks, curbs, lane paint, puddles, parked cars,
@@ -86,6 +114,9 @@ Gamepad works too if the project uses the new Input System.
 | `HangingWomanEvent` | The scare sequence, driving the player's camera. |
 | `HangingRagdoll` | Moves the rope's anchor to turn and drag the ragdoll, and draws the rope. |
 | `FootBloodTrail` | Leaves blood smears wherever a foot drags along the ground. |
+| `CameraRecorder` | Records the camera (R), drops markers (M), smooth scroll-wheel zoom. |
+| `CutscenePlayer` / `CutsceneAsset` | Replays a recorded camera move as a cutscene. |
+| `Editor/CutsceneTools` | Turns recordings into smoothed cutscene clips. |
 | `ClothPinning` | Pins her skirt at the waist and her hair at the scalp, leaving the rest free. |
 | `Billboard` | Turns lamp glows toward the camera. |
 | `ProceduralAudio` | Generates the rain, thunder, footstep and rope-creak sounds, so no audio files are needed. Assign real clips in the inspector to replace them. |
