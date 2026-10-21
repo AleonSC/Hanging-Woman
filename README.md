@@ -1,8 +1,8 @@
 # Hanging Woman
 
 A first person horror walk: it's raining, it's late, and you're walking down a city street past
-laundromats, noodle bars and a dying pawn-shop sign. Somewhere outside the 24-hour pharmacy a trail
-of blood starts on the sidewalk and leads you into an alley.
+laundromats, noodle bars and a dying pawn-shop sign. About halfway down, across the street on
+your left, a street lamp lights up two parallel trails of blood running from the road into an alley.
 
 ## Opening the project
 
@@ -36,7 +36,7 @@ Gamepad works too if the project uses the new Input System.
 ## What's in the scene
 
 - **The street:** a wet asphalt road with sidewalks, curbs, lane paint, puddles, parked cars,
-  hydrants, and sodium street lamps. The lamp just before the alley is dying.
+  hydrants, and sodium street lamps.
 - **The businesses:** a laundromat, a noodle bar, a pawn shop, a 24HR pharmacy, a liquor
   store, a hotel and more. Each has neon signs that flicker or buzz, lit or shuttered windows,
   awnings, and light spilling onto the pavement. The upper floors have scattered lit
@@ -44,10 +44,10 @@ Gamepad works too if the project uses the new Input System.
 - **The rain:** world-space streaks that follow the player and splash wherever they land,
   including on awnings, cars and the dumpster. You also get a looping rain sound, occasional
   lightning and rolling thunder, and dense fog.
-- **The blood trail:** sparse drips start on the sidewalk by the pharmacy and get heavier as
-  they reach the alley. Inside, they turn into drag smears past the dumpster, ending in a
-  pool by the back door, with a smear down the wall.
-- **The alley:** a dumpster, trash bags, boxes, pipes and a buzzing caged wall lamp.
+- **The blood trails:** two parallel drag marks, about heel-width apart, start at a pool in
+  the west lane. They cross the curb and sidewalk under a bright street lamp at the alley mouth,
+  then run past the dumpster to a second pool by the back door, with a smear down the wall.
+- **The alley:** on the left (west) side, about halfway down the street. It has a dumpster, trash bags, boxes, pipes and a buzzing caged wall lamp.
   `Alley Trigger` slows the player while they're inside and has `onPlayerEnter` /
   `onPlayerExit` UnityEvents to hook into. `Trail End (Event Anchor)` marks where the trail
   ends, for whatever happens next.

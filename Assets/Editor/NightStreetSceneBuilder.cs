@@ -15,8 +15,9 @@ namespace HangingWoman.EditorTools
     /// Re-running rebuilds the scene from scratch (materials are updated in place).
     ///
     /// Layout (metres): the street runs along +Z. The player starts on the east (+X) sidewalk
-    /// and walks north past a row of businesses. A blood trail starts on the sidewalk near the
-    /// pharmacy and turns east into an alley at z = 70..75.
+    /// and walks north past a row of businesses. About halfway down, an alley opens on the
+    /// west (left) side at z = 59..64. Under the street lamp at its mouth, two parallel blood
+    /// trails run from the road, over the sidewalk and into the alley.
     /// </summary>
     public static class NightStreetSceneBuilder
     {
@@ -32,9 +33,10 @@ namespace HangingWoman.EditorTools
         const float CurbWidth = 0.25f;
         const float FacadeX = 8f;
         const float SidewalkTop = 0.15f;
-        const float AlleyZMin = 70f;
-        const float AlleyZMax = 75f;
+        const float AlleyZMin = 59f;
+        const float AlleyZMax = 64f;
         const float AlleyDepth = 22f;
+        const int AlleySide = -1; // -1 = west (the player's left), 1 = east
         const float TileLength = 6f;
 
         static readonly Color FogColor = new Color(0.035f, 0.042f, 0.058f);
@@ -214,13 +216,12 @@ namespace HangingWoman.EditorTools
                 name = "24HR PHARMACY", neon = new Color(0.2f, 1f, 0.4f), interior = new Color(0.9f, 1f, 0.95f),
                 flicker = LightFlicker.Mode.Gentle
             });
-            ShopFront(parent, E, 56f, AlleyZMin, 12f, AlleyDepth, new Shop
+            ShopFront(parent, E, 56f, 70f, 12f, 14f, new Shop
             {
                 name = "LIQUOR", neon = new Color(1f, 0.2f, 0.6f), interior = new Color(1f, 0.6f, 0.7f),
                 awning = new Color(0.08f, 0.08f, 0.1f), flicker = LightFlicker.Mode.NeonBuzz
             });
-            // (alley gap)
-            ShopFront(parent, E, AlleyZMax, 90f, 20f, AlleyDepth, new Shop
+            ShopFront(parent, E, 70f, 90f, 20f, 14f, new Shop
             {
                 name = "HOTEL MIRADOR", neon = new Color(1f, 0.45f, 0.15f), interior = new Color(1f, 0.65f, 0.35f),
                 flicker = LightFlicker.Mode.NeonBuzz, blade = "HOTEL"
@@ -241,20 +242,22 @@ namespace HangingWoman.EditorTools
                 name = "CHECK CASHING", neon = new Color(1f, 0.85f, 0.3f), interior = new Color(1f, 0.95f, 0.8f),
                 flicker = LightFlicker.Mode.Gentle, awning = new Color(0.1f, 0.15f, 0.35f)
             });
-            ShopFront(parent, W, 24f, 40f, 14f, 14f, new Shop
+            ShopFront(parent, W, 24f, 36f, 14f, 14f, new Shop
             {
                 name = "", neon = Color.gray, open = false, shutter = true, signLit = false
             });
-            ShopFront(parent, W, 40f, 54f, 11f, 14f, new Shop
+            ShopFront(parent, W, 36f, 48f, 11f, 14f, new Shop
             {
                 name = "VIDEO", neon = new Color(0.9f, 0.2f, 1f), open = false, flicker = LightFlicker.Mode.NeonBuzz
             });
-            Building(parent, W, 54f, 70f, 19f);
-            ShopFront(parent, W, 70f, 86f, 13f, 14f, new Shop
+            Building(parent, W, 48f, AlleyZMin, 19f, AlleyDepth);
+            // (alley gap)
+            ShopFront(parent, W, AlleyZMax, 80f, 13f, AlleyDepth, new Shop
             {
                 name = "LAST CALL", neon = new Color(0.3f, 0.5f, 1f), interior = new Color(0.6f, 0.45f, 0.9f),
                 awning = new Color(0.05f, 0.06f, 0.12f), flicker = LightFlicker.Mode.NeonBuzz, blade = "BAR"
             });
+            Building(parent, W, 80f, 86f, 14f);
             ShopFront(parent, W, 86f, 100f, 10f, 14f, new Shop
             {
                 name = "DRY CLEANING", neon = new Color(0.85f, 0.9f, 1f), open = false, shutter = true,
@@ -387,16 +390,20 @@ namespace HangingWoman.EditorTools
         static void BuildStreetLamps(Transform parent)
         {
             for (float z = 6f; z < 130f; z += 16f)
-            {
-                // The lamp just before the alley is dying.
-                bool broken = Mathf.Approximately(z, 70f);
-                StreetLamp(parent, 1, broken ? 66f : z, broken ? LightFlicker.Mode.Broken : LightFlicker.Mode.Steady);
-            }
+                StreetLamp(parent, 1, z, Mathf.Approximately(z, 102f) ? LightFlicker.Mode.Broken : LightFlicker.Mode.Steady);
             for (float z = 14f; z < 130f; z += 16f)
+            {
+                // The lamp that would stand at the alley mouth is replaced by the featured one below.
+                if (Mathf.Abs(z - (AlleyZMin + AlleyZMax) * 0.5f) < 4f) continue;
                 StreetLamp(parent, -1, z, Mathf.Approximately(z, 94f) ? LightFlicker.Mode.Broken : LightFlicker.Mode.Steady);
+            }
+
+            // Steady, bright lamp just south of the alley mouth, aimed so its pool of light
+            // falls across the blood trails where they cross the sidewalk.
+            StreetLamp(parent, AlleySide, AlleyZMin - 1.6f, LightFlicker.Mode.Steady, featured: true);
         }
 
-        static void StreetLamp(Transform parent, int side, float z, LightFlicker.Mode mode)
+        static void StreetLamp(Transform parent, int side, float z, LightFlicker.Mode mode, bool featured = false)
         {
             var lamp = Group($"Street Lamp {(side > 0 ? "E" : "W")} z{z:0}", parent);
             float x = side * (RoadHalfWidth + 0.6f);
@@ -417,6 +424,16 @@ namespace HangingWoman.EditorTools
             spot.color = Sodium;
             spot.shadows = LightShadows.None;
             spot.lightmapBakeType = LightmapBakeType.Realtime;
+            if (featured)
+            {
+                lamp.name = "Street Lamp (Alley Mouth)";
+                spot.transform.localRotation = Quaternion.Euler(78f, 0f, 0f); // tipped toward the alley
+                spot.spotAngle = 120f;
+                spot.range = 16f;
+                spot.intensity = 3.6f;
+                spot.shadows = LightShadows.Soft;
+                spot.shadowStrength = 0.8f;
+            }
 
             if (mode != LightFlicker.Mode.Steady)
             {
@@ -427,47 +444,50 @@ namespace HangingWoman.EditorTools
 
         // ------------------------------------------------------------------ Alley
 
+        /// <summary>Mirrors an x coordinate written for an east-side alley onto the alley's actual side.</summary>
+        static float AX(float eastX) => AlleySide * eastX;
+
         static void BuildAlley(Transform parent)
         {
             float zc = (AlleyZMin + AlleyZMax) * 0.5f;
             float width = AlleyZMax - AlleyZMin;
             float end = FacadeX + AlleyDepth;
 
-            Box("Alley Ground", parent, new Vector3(FacadeX + AlleyDepth * 0.5f, (SidewalkTop - 0.1f) * 0.5f, zc),
+            Box("Alley Ground", parent, new Vector3(AX(FacadeX + AlleyDepth * 0.5f), (SidewalkTop - 0.1f) * 0.5f, zc),
                 new Vector3(AlleyDepth, SidewalkTop + 0.1f, width), alleyGround);
-            Box("Back Wall", parent, new Vector3(end + 0.25f, 5f, zc), new Vector3(0.5f, 10f, width + 0.2f), wallPalette[0]);
-            Box("Drain Channel", parent, new Vector3(FacadeX + AlleyDepth * 0.5f, SidewalkTop + 0.002f, zc), new Vector3(AlleyDepth, 0.004f, 0.25f), pipeMetal, collider: false);
+            Box("Back Wall", parent, new Vector3(AX(end + 0.25f), 5f, zc), new Vector3(0.5f, 10f, width + 0.2f), wallPalette[0]);
+            Box("Drain Channel", parent, new Vector3(AX(FacadeX + AlleyDepth * 0.5f), SidewalkTop + 0.002f, zc), new Vector3(AlleyDepth, 0.004f, 0.25f), pipeMetal, collider: false);
 
             // Dumpster against the north wall, the trail passes right by it.
             var dumpster = Group("Dumpster", parent);
-            Box("Bin", dumpster, new Vector3(18.5f, SidewalkTop + 0.65f, AlleyZMax - 0.62f), new Vector3(1.9f, 1.3f, 1.1f), dumpsterGreen);
-            Box("Lid", dumpster, new Vector3(18.5f, SidewalkTop + 1.34f, AlleyZMax - 0.68f), new Vector3(1.95f, 0.06f, 1.2f), dumpsterGreen,
+            Box("Bin", dumpster, new Vector3(AX(18.5f), SidewalkTop + 0.65f, AlleyZMax - 0.62f), new Vector3(1.9f, 1.3f, 1.1f), dumpsterGreen);
+            Box("Lid", dumpster, new Vector3(AX(18.5f), SidewalkTop + 1.34f, AlleyZMax - 0.68f), new Vector3(1.95f, 0.06f, 1.2f), dumpsterGreen,
                 euler: new Vector3(-8f, 0f, 0f));
 
             // Trash bags and boxes.
             Vector3[] bags =
             {
-                new Vector3(20f, 0.32f, AlleyZMax - 0.45f), new Vector3(20.6f, 0.28f, AlleyZMax - 0.9f),
-                new Vector3(16.9f, 0.3f, AlleyZMax - 0.4f), new Vector3(12.5f, 0.27f, AlleyZMin + 0.45f)
+                new Vector3(AX(20f), 0.32f, AlleyZMax - 0.45f), new Vector3(AX(20.6f), 0.28f, AlleyZMax - 0.9f),
+                new Vector3(AX(16.9f), 0.3f, AlleyZMax - 0.4f), new Vector3(AX(12.5f), 0.27f, AlleyZMin + 0.45f)
             };
             foreach (var p in bags)
                 Prim(PrimitiveType.Sphere, "Trash Bag", parent, p + Vector3.up * SidewalkTop * 0.5f,
                     new Vector3(R(0.6f, 0.8f), R(0.5f, 0.65f), R(0.55f, 0.75f)), trashBag);
 
-            Box("Box", parent, new Vector3(23.5f, SidewalkTop + 0.3f, AlleyZMin + 0.45f), new Vector3(0.7f, 0.6f, 0.6f), cardboard, euler: new Vector3(0f, 12f, 0f));
-            Box("Box", parent, new Vector3(23.6f, SidewalkTop + 0.8f, AlleyZMin + 0.42f), new Vector3(0.5f, 0.4f, 0.5f), cardboard, euler: new Vector3(0f, -20f, 0f));
-            Box("Box (Flattened)", parent, new Vector3(14.5f, SidewalkTop + 0.01f, AlleyZMin + 1.2f), new Vector3(1.1f, 0.02f, 0.7f), cardboard, euler: new Vector3(0f, 30f, 0f));
+            Box("Box", parent, new Vector3(AX(23.5f), SidewalkTop + 0.3f, AlleyZMin + 0.45f), new Vector3(0.7f, 0.6f, 0.6f), cardboard, euler: new Vector3(0f, 12f, 0f));
+            Box("Box", parent, new Vector3(AX(23.6f), SidewalkTop + 0.8f, AlleyZMin + 0.42f), new Vector3(0.5f, 0.4f, 0.5f), cardboard, euler: new Vector3(0f, -20f, 0f));
+            Box("Box (Flattened)", parent, new Vector3(AX(14.5f), SidewalkTop + 0.01f, AlleyZMin + 1.2f), new Vector3(1.1f, 0.02f, 0.7f), cardboard, euler: new Vector3(0f, 30f, 0f));
 
             // Pipes and an AC unit on the walls.
-            Prim(PrimitiveType.Cylinder, "Drain Pipe", parent, new Vector3(13f, 5f, AlleyZMin + 0.12f), new Vector3(0.12f, 5f, 0.12f), pipeMetal);
-            Prim(PrimitiveType.Cylinder, "Drain Pipe", parent, new Vector3(25f, 5f, AlleyZMax - 0.12f), new Vector3(0.12f, 5f, 0.12f), pipeMetal);
-            Box("AC Unit", parent, new Vector3(16f, 3.6f, AlleyZMin + 0.35f), new Vector3(0.9f, 0.6f, 0.7f), shutterMetal);
+            Prim(PrimitiveType.Cylinder, "Drain Pipe", parent, new Vector3(AX(13f), 5f, AlleyZMin + 0.12f), new Vector3(0.12f, 5f, 0.12f), pipeMetal);
+            Prim(PrimitiveType.Cylinder, "Drain Pipe", parent, new Vector3(AX(25f), 5f, AlleyZMax - 0.12f), new Vector3(0.12f, 5f, 0.12f), pipeMetal);
+            Box("AC Unit", parent, new Vector3(AX(16f), 3.6f, AlleyZMin + 0.35f), new Vector3(0.9f, 0.6f, 0.7f), shutterMetal);
 
             // Back door and the single caged lamp at the end of the alley.
-            Box("Back Door", parent, new Vector3(26.2f, SidewalkTop + 1.1f, AlleyZMax - 0.04f), new Vector3(1.1f, 2.2f, 0.08f), shutterMetal);
-            var lampBox = Box("Wall Lamp", parent, new Vector3(26.2f, 3.0f, AlleyZMax - 0.12f), new Vector3(0.4f, 0.22f, 0.22f), alleyLampMat, collider: false);
+            Box("Back Door", parent, new Vector3(AX(26.2f), SidewalkTop + 1.1f, AlleyZMax - 0.04f), new Vector3(1.1f, 2.2f, 0.08f), shutterMetal);
+            var lampBox = Box("Wall Lamp", parent, new Vector3(AX(26.2f), 3.0f, AlleyZMax - 0.12f), new Vector3(0.4f, 0.22f, 0.22f), alleyLampMat, collider: false);
             NoShadows(lampBox);
-            var light = PointLight("Alley Light", parent, new Vector3(26.2f, 2.85f, AlleyZMax - 0.5f), new Color(0.75f, 0.85f, 0.75f), 1.3f, 9f);
+            var light = PointLight("Alley Light", parent, new Vector3(AX(26.2f), 2.85f, AlleyZMax - 0.5f), new Color(0.75f, 0.85f, 0.75f), 1.3f, 9f);
             light.shadows = LightShadows.Soft;
             light.shadowStrength = 0.85f;
             var f = Flicker(lampBox, LightFlicker.Mode.NeonBuzz, new[] { light }, new Renderer[] { lampBox.GetComponent<Renderer>() });
@@ -477,7 +497,7 @@ namespace HangingWoman.EditorTools
             var trigger = new GameObject("Alley Trigger");
             trigger.layer = 2;
             trigger.transform.SetParent(parent, false);
-            trigger.transform.position = new Vector3(FacadeX + 0.5f + (AlleyDepth - 0.5f) * 0.5f, 1.5f, zc);
+            trigger.transform.position = new Vector3(AX(FacadeX + 0.5f + (AlleyDepth - 0.5f) * 0.5f), 1.5f, zc);
             var box = trigger.AddComponent<BoxCollider>();
             box.isTrigger = true;
             box.size = new Vector3(AlleyDepth - 0.5f, 3f, width);
@@ -485,79 +505,131 @@ namespace HangingWoman.EditorTools
 
             var anchor = new GameObject("Trail End (Event Anchor)");
             anchor.transform.SetParent(parent, false);
-            anchor.transform.position = new Vector3(27.3f, SidewalkTop, 73.3f);
+            anchor.transform.position = new Vector3(AX(26.4f), SidewalkTop, AlleyZMax - 1.4f);
         }
 
         // ------------------------------------------------------------------ Blood trail
 
         static void BuildBloodTrail(Transform parent)
         {
-            // Sparse drips on the sidewalk outside the pharmacy, getting heavier as the
-            // trail turns into the alley and ends in a pool by the back door.
-            Vector2[] path =
+            // Two parallel drag marks, about heel-width apart, as if someone was pulled by the
+            // arms from the road, over the curb and into the alley. They begin at a pool in the
+            // west lane and end in another pool by the alley's back door.
+            Vector2[] control =
             {
-                new Vector2(6.3f, 53.5f), new Vector2(6.8f, 58f), new Vector2(6.4f, 62.5f), new Vector2(7.0f, 67f),
-                new Vector2(7.6f, 70.6f), new Vector2(9.6f, 72.2f), new Vector2(13.5f, 72.7f), new Vector2(17f, 72.1f),
-                new Vector2(20.5f, 72.5f), new Vector2(24f, 73.0f), new Vector2(26.6f, 73.4f)
+                new Vector2(0.9f, AlleyZMin - 3.8f), new Vector2(2.0f, AlleyZMin - 1.8f), new Vector2(3.3f, AlleyZMin + 0.3f),
+                new Vector2(4.9f, AlleyZMin + 1.8f), new Vector2(7.2f, AlleyZMin + 2.4f), new Vector2(10f, AlleyZMin + 2.5f),
+                new Vector2(14f, AlleyZMin + 2.3f), new Vector2(18f, AlleyZMin + 2.6f), new Vector2(22f, AlleyZMin + 2.4f),
+                new Vector2(24.2f, AlleyZMin + 2.9f), new Vector2(26.0f, AlleyZMin + 3.5f)
             };
+            // Written for an east-side alley; mirrored onto the alley's actual side.
+            for (int i = 0; i < control.Length; i++) control[i].x = AX(control[i].x);
 
-            float total = 0f;
-            for (int i = 1; i < path.Length; i++) total += Vector2.Distance(path[i - 1], path[i]);
+            var path = SmoothPath(control, 12);
+            const float halfGap = 0.21f;
+            foreach (float offset in new[] { -halfGap, halfGap })
+                DragTrail(parent, path, offset);
 
-            float travelled = 0f, nextDrop = 0f, nextSmear = 0f;
-            for (int i = 1; i < path.Length; i++)
+            // Drips between the two marks.
+            float total = PathLength(path);
+            for (float d = 0.4f; d < total - 0.5f; d += R(0.5f, 1.4f))
             {
-                Vector2 a = path[i - 1], b = path[i];
-                Vector2 dir = (b - a).normalized;
-                Vector2 perp = new Vector2(-dir.y, dir.x);
-                float seg = Vector2.Distance(a, b);
-
-                for (float d = 0f; d < seg; d += 0.05f)
-                {
-                    float t = (travelled + d) / total;
-                    Vector2 p = a + dir * d;
-                    bool inAlley = p.x > FacadeX + 0.5f;
-
-                    if (travelled + d >= nextDrop)
-                    {
-                        Vector2 jitter = perp * R(-0.18f, 0.18f) + dir * R(-0.1f, 0.1f);
-                        float size = Mathf.Lerp(0.07f, 0.16f, t) * R(0.7f, 1.3f);
-                        FloorDecal(parent, p + jitter, size, R(0f, 360f), bloodDrop);
-
-                        if (rng.NextDouble() < Mathf.Lerp(0.04f, 0.35f, t))
-                            FloorDecal(parent, p + perp * R(-0.3f, 0.3f), R(0.25f, 0.5f) * Mathf.Lerp(0.8f, 1.4f, t), R(0f, 360f), bloodSplat);
-
-                        nextDrop = travelled + d + Mathf.Lerp(1.1f, 0.3f, t) * R(0.6f, 1.4f);
-                    }
-
-                    // Once in the alley something is being dragged.
-                    if (inAlley && travelled + d >= nextSmear)
-                    {
-                        float length = R(0.6f, 1.1f);
-                        Vector2 along = dir + perp * R(-0.15f, 0.15f);
-                        FloorDecal(parent, p + perp * R(-0.08f, 0.08f), new Vector2(length, R(0.22f, 0.35f)), along, bloodSmear);
-                        nextSmear = travelled + d + Mathf.Lerp(1.6f, 0.6f, t) * R(0.7f, 1.3f);
-                    }
-                }
-                travelled += seg;
+                SamplePath(path, d, out var p, out var dir);
+                var perp = new Vector2(-dir.y, dir.x);
+                FloorDecal(parent, p + perp * R(-0.12f, 0.12f), R(0.05f, 0.11f), R(0f, 360f), bloodDrop);
             }
 
-            Vector2 endPos = path[path.Length - 1];
+            // Where it started: a pool in the road with spatter around it.
+            Vector2 startPos = path[0] - (path[1] - path[0]).normalized * 0.5f;
+            FloorDecal(parent, startPos, 1.3f, R(0f, 360f), bloodPool);
+            for (int i = 0; i < 3; i++)
+                FloorDecal(parent, startPos + new Vector2(R(-0.9f, 0.9f), R(-0.9f, 0.9f)), R(0.3f, 0.55f), R(0f, 360f), bloodSplat);
+            for (int i = 0; i < 8; i++)
+                FloorDecal(parent, startPos + new Vector2(R(-1.4f, 1.4f), R(-1.4f, 1.4f)), R(0.05f, 0.12f), R(0f, 360f), bloodDrop);
+
+            // Where it ends: a larger pool by the back door.
+            Vector2 endPos = path[path.Count - 1];
             FloorDecal(parent, endPos, 1.7f, R(0f, 360f), bloodPool);
-            FloorDecal(parent, endPos + new Vector2(0.5f, -0.4f), 0.8f, R(0f, 360f), bloodSplat);
+            FloorDecal(parent, endPos + new Vector2(AlleySide * -0.5f, -0.4f), 0.8f, R(0f, 360f), bloodSplat);
             for (int i = 0; i < 10; i++)
                 FloorDecal(parent, endPos + new Vector2(R(-1.2f, 1.2f), R(-1.2f, 1.0f)), R(0.06f, 0.15f), R(0f, 360f), bloodDrop);
 
-            // Smeared down the wall beside the back door, like someone slid against it.
-            var wallSmear = Quad("Blood Smear (Wall)", parent, new Vector3(27.4f, SidewalkTop + 0.85f, AlleyZMax - 0.008f),
+            // Smeared down the wall beside the back door.
+            var wallSmear = Quad("Blood Smear (Wall)", parent, new Vector3(AX(27.4f), SidewalkTop + 0.85f, AlleyZMax - 0.008f),
                 Quaternion.Euler(0f, 0f, 84f), new Vector2(1.5f, 0.42f), bloodSmear);
             NoShadows(wallSmear);
-            var handprint = Quad("Blood Splat (Wall)", parent, new Vector3(27.5f, SidewalkTop + 1.55f, AlleyZMax - 0.009f),
+            var handprint = Quad("Blood Splat (Wall)", parent, new Vector3(AX(27.5f), SidewalkTop + 1.55f, AlleyZMax - 0.009f),
                 Quaternion.Euler(0f, 0f, R(0f, 360f)), new Vector2(0.35f, 0.35f), bloodSplat);
             NoShadows(handprint);
-            // A few drops leading off the curb onto the sidewalk where it starts, easy to miss.
-            FloorDecal(parent, new Vector2(5.4f, 51.8f), 0.07f, 0f, bloodDrop);
-            FloorDecal(parent, new Vector2(5.9f, 52.7f), 0.09f, 0f, bloodDrop);
+        }
+
+        /// <summary>One continuous drag mark following the path at a sideways offset.</summary>
+        static void DragTrail(Transform parent, List<Vector2> path, float offset)
+        {
+            float total = PathLength(path);
+            float wander = 0f;
+            for (float d = 0f; d < total; d += 0.42f * R(0.8f, 1.2f))
+            {
+                SamplePath(path, d, out var p, out var dir);
+                var perp = new Vector2(-dir.y, dir.x);
+                wander = Mathf.Clamp(wander + R(-0.02f, 0.02f), -0.05f, 0.05f);
+                Vector2 pos = p + perp * (offset + wander);
+                float t = d / total;
+
+                // A smear can't bend over the curb step, so the curb only gets drips.
+                if (Mathf.Abs(Mathf.Abs(pos.x) - (RoadHalfWidth + CurbWidth * 0.5f)) < 0.5f)
+                {
+                    FloorDecal(parent, pos, R(0.06f, 0.1f), R(0f, 360f), bloodDrop);
+                    continue;
+                }
+                // Rain has washed out the odd patch, more so out on the open road.
+                if (rng.NextDouble() < (Mathf.Abs(pos.x) < RoadHalfWidth ? 0.15f : 0.06f)) continue;
+
+                float length = R(0.55f, 0.85f);
+                float width = Mathf.Lerp(0.19f, 0.13f, t) * R(0.85f, 1.15f);
+                FloorDecal(parent, pos, new Vector2(length, width), dir + perp * R(-0.06f, 0.06f), bloodSmear);
+            }
+        }
+
+        static List<Vector2> SmoothPath(Vector2[] control, int samplesPerSegment)
+        {
+            var result = new List<Vector2>();
+            for (int i = 0; i < control.Length - 1; i++)
+            {
+                Vector2 p0 = control[Mathf.Max(i - 1, 0)], p1 = control[i], p2 = control[i + 1];
+                Vector2 p3 = control[Mathf.Min(i + 2, control.Length - 1)];
+                for (int k = 0; k < samplesPerSegment; k++)
+                {
+                    float t = k / (float)samplesPerSegment, t2 = t * t, t3 = t2 * t;
+                    result.Add(0.5f * (2f * p1 + (p2 - p0) * t + (2f * p0 - 5f * p1 + 4f * p2 - p3) * t2 + (3f * p1 - p0 - 3f * p2 + p3) * t3));
+                }
+            }
+            result.Add(control[control.Length - 1]);
+            return result;
+        }
+
+        static float PathLength(List<Vector2> path)
+        {
+            float total = 0f;
+            for (int i = 1; i < path.Count; i++) total += Vector2.Distance(path[i - 1], path[i]);
+            return total;
+        }
+
+        static void SamplePath(List<Vector2> path, float distance, out Vector2 position, out Vector2 direction)
+        {
+            for (int i = 1; i < path.Count; i++)
+            {
+                float seg = Vector2.Distance(path[i - 1], path[i]);
+                if (distance <= seg || i == path.Count - 1)
+                {
+                    direction = (path[i] - path[i - 1]).normalized;
+                    position = path[i - 1] + direction * Mathf.Min(distance, seg);
+                    return;
+                }
+                distance -= seg;
+            }
+            position = path[0];
+            direction = Vector2.up;
         }
 
         static void FloorDecal(Transform parent, Vector2 xz, float size, float yaw, Material m) =>
@@ -572,8 +644,10 @@ namespace HangingWoman.EditorTools
 
         static void FloorDecal(Transform parent, Vector2 xz, Vector2 size, Quaternion rotation, Material m)
         {
-            // Stagger heights a hair so overlapping decals don't z-fight.
-            float y = SidewalkTop + 0.003f + (decalIndex++ % 16) * 0.0004f;
+            // Road or raised sidewalk/alley; stagger heights a hair so overlapping decals don't
+            // z-fight with each other or the lane paint.
+            float surface = Mathf.Abs(xz.x) < RoadHalfWidth ? 0f : SidewalkTop;
+            float y = surface + 0.005f + (decalIndex++ % 16) * 0.0004f;
             var q = Quad(m.name, parent, new Vector3(xz.x, y, xz.y), rotation, size, m);
             NoShadows(q);
         }
@@ -639,7 +713,7 @@ namespace HangingWoman.EditorTools
                 Puddle(parent, new Vector3(side * R(5f, 7.5f), SidewalkTop + 0.002f, R(StreetStart + 4f, StreetEnd - 10f)), R(0.5f, 1.3f), R(0.4f, 1f));
             }
             for (int i = 0; i < 6; i++)
-                Puddle(parent, new Vector3(R(10f, 28f), SidewalkTop + 0.002f, R(AlleyZMin + 1f, AlleyZMax - 1f)), R(0.7f, 1.8f), R(0.5f, 1.2f));
+                Puddle(parent, new Vector3(AX(R(10f, 28f)), SidewalkTop + 0.002f, R(AlleyZMin + 1f, AlleyZMax - 1f)), R(0.7f, 1.8f), R(0.5f, 1.2f));
         }
 
         static void Puddle(Transform parent, Vector3 pos, float sx, float sz, float? yaw = null)
@@ -659,7 +733,7 @@ namespace HangingWoman.EditorTools
         {
             for (float z = -6f; z <= 130f; z += 20f)
                 Probe(parent, new Vector3(0f, 3f, z), new Vector3(FacadeX * 2f + 2f, 14f, 22f));
-            Probe(parent, new Vector3(FacadeX + AlleyDepth * 0.5f, 3f, (AlleyZMin + AlleyZMax) * 0.5f), new Vector3(AlleyDepth, 10f, 5.5f));
+            Probe(parent, new Vector3(AX(FacadeX + AlleyDepth * 0.5f), 3f, (AlleyZMin + AlleyZMax) * 0.5f), new Vector3(AlleyDepth, 10f, 5.5f));
         }
 
         static void Probe(Transform parent, Vector3 pos, Vector3 size)
