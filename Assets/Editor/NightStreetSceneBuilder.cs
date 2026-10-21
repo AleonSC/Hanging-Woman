@@ -19,7 +19,7 @@ namespace HangingWoman.EditorTools
     /// west (left) side at z = 59..64. Under the street lamp at its mouth, two parallel blood
     /// trails run from the road, over the sidewalk and into the alley.
     /// </summary>
-    public static class NightStreetSceneBuilder
+    public static partial class NightStreetSceneBuilder
     {
         const string Root = "Assets";
         const string MatDir = Root + "/Generated/Materials";
@@ -28,7 +28,7 @@ namespace HangingWoman.EditorTools
         const string SceneDir = Root + "/Scenes";
         public const string ScenePath = SceneDir + "/NightStreet.unity";
         /// <summary>Bump whenever the builder changes what it builds, so stale scenes get rebuilt.</summary>
-        public const int SceneVersion = 9;
+        public const int SceneVersion = 10;
         public static string VersionKey => "HangingWoman.SceneVersion." + Application.dataPath;
         public static bool SceneIsCurrent => File.Exists(ScenePath) && EditorPrefs.GetInt(VersionKey, 0) == SceneVersion;
 
@@ -58,7 +58,7 @@ namespace HangingWoman.EditorTools
         static Material shutterMetal, doorWood, lampPole, lampHead, lampHeadOff, lampGlow, lampBeam, puddle, alleyGround, dumpsterGreen, trashBag;
         static Material cardboard, pipeMetal, carGlass, tire, hydrantRed, alleyLampMat;
         static Material bloodDrop, bloodSplat, bloodSmear, bloodPool;
-        static Material skin, dress, hair, rope, ropeKnot, socket;
+        static Material dress, rope, ropeKnot;
         static Material[] wallPalette;
 
         [MenuItem("Hanging Woman/Build Night Street Scene", priority = 0)]
@@ -735,98 +735,63 @@ namespace HangingWoman.EditorTools
             ragdoll.position = groundPoint + Vector3.up * -0.01f;
             ragdoll.rotation = Quaternion.Euler(0f, AlleySide * 90f, 0f);
 
-            // Pelvis and chest.
+            // Bones: rigidbodies with colliders and limp joints. Everything you see is one
+            // skinned mesh (plus cloth hair and skirt) laid over them, built further down.
             var pelvis = Bone("Pelvis", ragdoll, new Vector3(0f, 0.92f, 0f), 10f);
-            BoxCol(pelvis, Vector3.zero, new Vector3(0.3f, 0.2f, 0.2f));
-            Part(PrimitiveType.Capsule, "Hips", pelvis.transform, new Vector3(0f, 0.0f, 0f), new Vector3(0.29f, 0.15f, 0.2f), dress, new Vector3(0f, 0f, 90f));
-            var skirt = new GameObject("Skirt");
-            skirt.transform.SetParent(pelvis.transform, false);
-            skirt.transform.localPosition = new Vector3(0f, 0.07f, 0f);
-            skirt.AddComponent<MeshFilter>().sharedMesh = SaveMesh("Dress Skirt", SkirtMesh(0.15f, 0.29f, 0.72f, 30, 7, 5));
-            skirt.AddComponent<MeshRenderer>().sharedMaterial = dress;
+            CapsuleCol(pelvis, Vector3.zero, 0.11f, 0.36f, direction: 0);
 
             var chest = Bone("Chest", pelvis.transform, new Vector3(0f, 0.08f, 0f), 12f);
-            BoxCol(chest, new Vector3(0f, 0.21f, 0f), new Vector3(0.3f, 0.42f, 0.19f));
+            CapsuleCol(chest, new Vector3(0f, 0.21f, -0.005f), 0.13f, 0.46f);
             Limb(chest, pelvis, -20f, 25f, 15f, 10f);
-            Part(PrimitiveType.Capsule, "Torso", chest.transform, new Vector3(0f, 0.15f, 0.005f), new Vector3(0.3f, 0.24f, 0.19f), dress);
-            Part(PrimitiveType.Cylinder, "Neck", chest.transform, new Vector3(0f, 0.4f, 0f), new Vector3(0.075f, 0.05f, 0.075f), skin);
 
             // Head, lolling forward and to one side.
             var head = Bone("Head", chest.transform, new Vector3(0f, 0.42f, 0f), 4f);
             head.transform.localRotation = Quaternion.Euler(20f, 0f, 24f);
             var skullCol = head.gameObject.AddComponent<SphereCollider>();
-            skullCol.center = new Vector3(0f, 0.12f, 0.015f);
+            skullCol.center = HeadCenter;
             skullCol.radius = 0.1f;
             Limb(head, chest, -40f, 45f, 35f, 25f);
-            Part(PrimitiveType.Sphere, "Skull", head.transform, new Vector3(0f, 0.12f, 0.015f), new Vector3(0.18f, 0.22f, 0.2f), skin);
-            Part(PrimitiveType.Sphere, "Hair Cap", head.transform, new Vector3(0f, 0.15f, -0.028f), new Vector3(0.192f, 0.225f, 0.192f), hair);
-            Part(PrimitiveType.Sphere, "Eye Socket L", head.transform, new Vector3(-0.038f, 0.13f, 0.098f), new Vector3(0.042f, 0.03f, 0.03f), socket);
-            Part(PrimitiveType.Sphere, "Eye Socket R", head.transform, new Vector3(0.038f, 0.13f, 0.098f), new Vector3(0.042f, 0.03f, 0.03f), socket);
-            Part(PrimitiveType.Sphere, "Mouth", head.transform, new Vector3(0.004f, 0.055f, 0.093f), new Vector3(0.04f, 0.022f, 0.02f), socket);
             var face = Group("Face (Look Target)", head.transform);
-            face.localPosition = new Vector3(0f, 0.11f, 0.1f);
+            face.localPosition = HeadCenter + new Vector3(0f, -0.005f, 0.085f);
 
-            // Long hair hangs down her back and in front of her face. It's attached to the
-            // chest rather than the lolling head so it keeps hanging straight down.
-            var hairRoot = Group("Hair", chest.transform);
-            hairRoot.localPosition = new Vector3(0f, 0.42f, 0f);
-            Part(PrimitiveType.Cube, "Hair Back", hairRoot, new Vector3(-0.035f, -0.12f, -0.095f), new Vector3(0.22f, 0.62f, 0.03f), hair);
-            for (int i = 0; i < 12; i++)
+            var upperArms = new Rigidbody[2];
+            var forearms = new Rigidbody[2];
+            var thighs = new Rigidbody[2];
+            var calves = new Rigidbody[2];
+            for (int i = 0; i < 2; i++)
             {
-                float x = Mathf.Lerp(-0.15f, 0.08f, i / 11f) + R(-0.01f, 0.01f);
-                float length = R(0.55f, 0.8f);
-                Part(PrimitiveType.Cube, "Strand", hairRoot, new Vector3(x, 0.2f - length * 0.5f, R(-0.11f, -0.075f)),
-                    new Vector3(R(0.03f, 0.055f), length, 0.014f), hair, new Vector3(R(-3f, 3f), R(-15f, 15f), R(-2f, 2f)));
-            }
-            foreach (float x in new[] { -0.15f, 0.07f })
-            {
-                float length = R(0.45f, 0.6f);
-                Part(PrimitiveType.Cube, "Strand Side", hairRoot, new Vector3(x, 0.15f - length * 0.5f, R(0.0f, 0.05f)),
-                    new Vector3(0.035f, length, 0.03f), hair, new Vector3(0f, R(-10f, 10f), 0f));
-            }
-            foreach (float x in new[] { -0.13f, -0.1f, -0.065f, 0.0f, 0.03f })
-            {
-                float length = R(0.42f, 0.6f);
-                Part(PrimitiveType.Cube, "Strand Front", hairRoot, new Vector3(x, 0.18f - length * 0.5f, R(0.18f, 0.2f)),
-                    new Vector3(R(0.022f, 0.04f), length, 0.01f), hair, new Vector3(R(-4f, 4f), R(-12f, 12f), R(-3f, 3f)));
-            }
-
-            // Arms and legs.
-            var feet = new List<Rigidbody>();
-            foreach (int s in new[] { -1, 1 })
-            {
+                int s = i == 0 ? -1 : 1;
                 string n = s < 0 ? "R" : "L";
-                Part(PrimitiveType.Cylinder, "Sleeve " + n, chest.transform, new Vector3(s * 0.165f, 0.31f, 0f), new Vector3(0.09f, 0.05f, 0.09f), dress, new Vector3(0f, 0f, s * 6f));
 
-                var upperArm = Bone("Upper Arm " + n, chest.transform, new Vector3(s * 0.175f, 0.36f, 0f), 2f);
-                CapsuleCol(upperArm, new Vector3(0f, -0.14f, 0f), 0.04f, 0.3f);
-                Limb(upperArm, chest, -70f, 40f, 50f, 20f);
-                Part(PrimitiveType.Capsule, "Upper Arm", upperArm.transform, new Vector3(0f, -0.14f, 0f), new Vector3(0.07f, 0.15f, 0.07f), skin);
+                upperArms[i] = Bone("Upper Arm " + n, chest.transform, new Vector3(s * 0.175f, 0.36f, 0f), 2f);
+                CapsuleCol(upperArms[i], new Vector3(0f, -0.14f, 0f), 0.04f, 0.3f);
+                Limb(upperArms[i], chest, -70f, 40f, 50f, 20f);
 
-                var forearm = Bone("Forearm " + n, upperArm.transform, new Vector3(s * 0.01f, -0.29f, 0f), 1.5f);
-                CapsuleCol(forearm, new Vector3(0f, -0.17f, 0.01f), 0.035f, 0.36f);
-                Limb(forearm, upperArm, -110f, 3f, 10f, 10f);
-                Part(PrimitiveType.Capsule, "Forearm", forearm.transform, new Vector3(0f, -0.13f, 0.01f), new Vector3(0.06f, 0.14f, 0.06f), skin);
-                Part(PrimitiveType.Sphere, "Hand", forearm.transform, new Vector3(0f, -0.33f, 0.02f), new Vector3(0.055f, 0.11f, 0.035f), skin, new Vector3(-8f, s * 15f, 0f));
+                forearms[i] = Bone("Forearm " + n, upperArms[i].transform, new Vector3(s * 0.01f, -0.29f, 0f), 1.5f);
+                CapsuleCol(forearms[i], new Vector3(0f, -0.17f, 0.01f), 0.035f, 0.36f);
+                Limb(forearms[i], upperArms[i], -110f, 3f, 10f, 10f);
 
-                var thigh = Bone("Thigh " + n, pelvis.transform, new Vector3(s * 0.08f, -0.02f, 0f), 6f);
-                CapsuleCol(thigh, new Vector3(0f, -0.21f, 0f), 0.06f, 0.46f);
-                Limb(thigh, pelvis, -90f, 20f, 20f, 10f);
-                Part(PrimitiveType.Capsule, "Thigh", thigh.transform, new Vector3(0f, -0.21f, 0f), new Vector3(0.1f, 0.21f, 0.1f), skin);
+                thighs[i] = Bone("Thigh " + n, pelvis.transform, new Vector3(s * 0.08f, -0.02f, 0f), 6f);
+                CapsuleCol(thighs[i], new Vector3(0f, -0.21f, 0f), 0.06f, 0.46f);
+                Limb(thighs[i], pelvis, -90f, 20f, 20f, 10f);
 
-                var calf = Bone("Calf " + n, thigh.transform, new Vector3(0f, -0.42f, 0f), 3.5f);
-                CapsuleCol(calf, new Vector3(0f, -0.2f, 0f), 0.045f, 0.42f);
-                BoxCol(calf, new Vector3(0f, -0.445f, 0.05f), new Vector3(0.07f, 0.05f, 0.2f));
-                Limb(calf, thigh, -3f, 120f, 5f, 5f);
-                Part(PrimitiveType.Capsule, "Calf", calf.transform, new Vector3(0f, -0.2f, 0f), new Vector3(0.07f, 0.2f, 0.07f), skin);
-                Part(PrimitiveType.Cube, "Foot", calf.transform, new Vector3(0f, -0.445f, 0.05f), new Vector3(0.065f, 0.05f, 0.19f), skin);
+                calves[i] = Bone("Calf " + n, thighs[i].transform, new Vector3(0f, -0.42f, 0f), 3.5f);
+                CapsuleCol(calves[i], new Vector3(0f, -0.2f, 0f), 0.045f, 0.42f);
+                BoxCol(calves[i], new Vector3(0f, -0.445f, 0.05f), new Vector3(0.07f, 0.05f, 0.2f));
+                Limb(calves[i], thighs[i], -3f, 120f, 5f, 5f);
 
-                var trail = calf.gameObject.AddComponent<FootBloodTrail>();
+                var trail = calves[i].gameObject.AddComponent<FootBloodTrail>();
                 trail.smearMaterial = bloodSmear;
                 trail.groundHeight = SidewalkTop;
                 trail.soleLocalPoint = new Vector3(0f, -0.465f, 0.05f);
-                feet.Add(calf);
             }
+
+            BuildWomanBody(ragdoll, new[]
+            {
+                pelvis.transform, chest.transform, head.transform,
+                upperArms[0].transform, forearms[0].transform, upperArms[1].transform, forearms[1].transform,
+                thighs[0].transform, calves[0].transform, thighs[1].transform, calves[1].transform,
+            });
 
             // Noose and knot ride on the chest; the rope leaves the knot behind one ear.
             var noose = new GameObject("Noose");
@@ -943,13 +908,13 @@ namespace HangingWoman.EditorTools
             c.size = size;
         }
 
-        static void CapsuleCol(Rigidbody bone, Vector3 center, float radius, float height)
+        static void CapsuleCol(Rigidbody bone, Vector3 center, float radius, float height, int direction = 1)
         {
             var c = bone.gameObject.AddComponent<CapsuleCollider>();
             c.center = center;
             c.radius = radius;
             c.height = height;
-            c.direction = 1;
+            c.direction = direction;
         }
 
         /// <summary>
@@ -974,54 +939,6 @@ namespace HangingWoman.EditorTools
         /// <summary>A collider-less, shadow-casting body part.</summary>
         static GameObject Part(PrimitiveType type, string name, Transform parent, Vector3 pos, Vector3 scale, Material m, Vector3 euler = default) =>
             Prim(type, name, parent, pos, scale, m, euler, collider: false);
-
-        /// <summary>A flared tube with a ragged, uneven hem, double sided so it reads from below.</summary>
-        static Mesh SkirtMesh(float topRadius, float bottomRadius, float height, int segments, int rings, int seed)
-        {
-            var r = new System.Random(seed);
-            var hem = new float[segments + 1];
-            for (int i = 0; i <= segments; i++) hem[i] = i == segments ? hem[0] : (float)r.NextDouble() * 0.07f;
-
-            var verts = new List<Vector3>();
-            var uvs = new List<Vector2>();
-            for (int ring = 0; ring <= rings; ring++)
-            {
-                float t = ring / (float)rings;
-                for (int i = 0; i <= segments; i++)
-                {
-                    float a = i / (float)segments * Mathf.PI * 2f;
-                    float wrinkle = 1f + 0.06f * t * Mathf.Sin(a * 7f + t * 2f) + 0.03f * t * Mathf.Sin(a * 13f);
-                    float radius = Mathf.Lerp(topRadius, bottomRadius, t) * wrinkle;
-                    float y = -height * t - (ring == rings ? hem[i] : 0f);
-                    verts.Add(new Vector3(Mathf.Sin(a) * radius, y, Mathf.Cos(a) * radius * 0.85f));
-                    uvs.Add(new Vector2(i / (float)segments, 1f - t));
-                }
-            }
-
-            int count = verts.Count;
-            verts.AddRange(verts.ToArray());
-            uvs.AddRange(uvs.ToArray());
-
-            var tris = new List<int>();
-            int row = segments + 1;
-            for (int ring = 0; ring < rings; ring++)
-            {
-                for (int i = 0; i < segments; i++)
-                {
-                    int a = ring * row + i, b = a + 1, c = a + row, d = c + 1;
-                    tris.AddRange(new[] { a, c, b, b, c, d });                                 // outside
-                    tris.AddRange(new[] { count + a, count + b, count + c, count + b, count + d, count + c }); // inside
-                }
-            }
-
-            var mesh = new Mesh { name = "Dress Skirt" };
-            mesh.SetVertices(verts);
-            mesh.SetUVs(0, uvs);
-            mesh.SetTriangles(tris, 0);
-            mesh.RecalculateNormals();
-            mesh.RecalculateBounds();
-            return mesh;
-        }
 
         static Mesh TorusMesh(float radius, float tube, int segments, int sides)
         {
@@ -1319,11 +1236,9 @@ namespace HangingWoman.EditorTools
             bloodSmear = Cutout(Mat("Blood Smear", bloodColor * 0.85f, 0.88f, 0f, tex: BloodTexture("blood_smear", BloodShape.Smear, 37)));
             bloodPool = Cutout(Mat("Blood Pool", bloodColor * 0.8f, 0.96f, 0f, tex: BloodTexture("blood_pool", BloodShape.Pool, 51)));
 
-            // The woman: grey-pale skin, a soaked and filthy white dress, wet black hair.
-            skin = Mat("Skin Pale", new Color(0.6f, 0.59f, 0.58f), 0.35f, 0f, tex: NoiseTexture("skin_mottle", 128, 0.82f, 1f, 6, specks: false));
+            // The woman's skin, eyes and hair are made in CreateWomanMaterials; this is her dress.
             dress = Mat("Dress Dirty White", new Color(0.86f, 0.84f, 0.8f), 0.4f, 0f, tex: DressTexture("dress_grime", 256));
-            hair = Mat("Hair Wet Black", new Color(0.012f, 0.012f, 0.014f), 0.8f);
-            socket = Mat("Eye Socket", new Color(0.01f, 0.005f, 0.005f), 0.9f);
+            CreateWomanMaterials();
             var ropeTex = RopeTexture("rope_braid", 64);
             rope = Mat("Rope", new Color(0.33f, 0.27f, 0.18f), 0.25f, 0f, tex: ropeTex, tiling: new Vector2(1f, 1200f)); // ~12cm twist along 140m
             ropeKnot = Mat("Rope Knot", new Color(0.33f, 0.27f, 0.18f), 0.25f, 0f, tex: ropeTex);
@@ -1469,7 +1384,7 @@ namespace HangingWoman.EditorTools
             return mat;
         }
 
-        static Texture2D SaveTexture(string name, int size, Func<int, int, Color> pixel, bool alpha, TextureWrapMode wrap)
+        static Texture2D SaveTexture(string name, int size, Func<int, int, Color> pixel, bool alpha, TextureWrapMode wrap, bool preserveCoverage = false)
         {
             var t = new Texture2D(size, size, TextureFormat.RGBA32, false);
             var px = new Color[size * size];
@@ -1490,6 +1405,9 @@ namespace HangingWoman.EditorTools
             importer.wrapMode = wrap;
             importer.mipmapEnabled = true;
             importer.anisoLevel = 4;
+            // Keeps alpha-tested detail (hair strands) from thinning out in the distance.
+            importer.mipMapsPreserveCoverage = preserveCoverage;
+            importer.alphaTestReferenceValue = 0.45f;
             importer.SaveAndReimport();
             return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
         }
