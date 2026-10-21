@@ -10,7 +10,7 @@ of blood starts on the sidewalk and leads you into an alley.
    Unity 2022.3 LTS or Unity 6 both work. If Hub asks about the editor version, pick any
    2022.3+ install you have.
 2. When the project first opens, the scene builds itself and is saved to
-   `Assets/HangingWoman/Scenes/NightStreet.unity`.
+   `Assets/Scenes/NightStreet.unity`.
    You can rebuild it at any time with **Hanging Woman → Build Night Street Scene**.
 3. Press **Play**.
 

@@ -11,7 +11,7 @@ namespace HangingWoman.EditorTools
 {
     /// <summary>
     /// Builds the night street scene from primitives and generated textures, then saves it to
-    /// Assets/HangingWoman/Scenes/NightStreet.unity. Run it from the "Hanging Woman" menu.
+    /// Assets/Scenes/NightStreet.unity. Run it from the "Hanging Woman" menu.
     /// Re-running rebuilds the scene from scratch (materials are updated in place).
     ///
     /// Layout (metres): the street runs along +Z. The player starts on the east (+X) sidewalk
@@ -20,7 +20,7 @@ namespace HangingWoman.EditorTools
     /// </summary>
     public static class NightStreetSceneBuilder
     {
-        const string Root = "Assets/HangingWoman";
+        const string Root = "Assets";
         const string MatDir = Root + "/Generated/Materials";
         const string TexDir = Root + "/Generated/Textures";
         const string SceneDir = Root + "/Scenes";
