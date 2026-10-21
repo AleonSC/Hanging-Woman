@@ -28,7 +28,7 @@ namespace HangingWoman.EditorTools
         const string SceneDir = Root + "/Scenes";
         public const string ScenePath = SceneDir + "/NightStreet.unity";
         /// <summary>Bump whenever the builder changes what it builds, so stale scenes get rebuilt.</summary>
-        public const int SceneVersion = 6;
+        public const int SceneVersion = 7;
         public static string VersionKey => "HangingWoman.SceneVersion." + Application.dataPath;
         public static bool SceneIsCurrent => File.Exists(ScenePath) && EditorPrefs.GetInt(VersionKey, 0) == SceneVersion;
 
@@ -55,7 +55,7 @@ namespace HangingWoman.EditorTools
 
         // Shared materials
         static Material asphalt, sidewalk, curb, roadPaint, trim, windowDark, windowWarm, windowCool, windowTv;
-        static Material shutterMetal, doorWood, lampPole, lampHead, lampHeadOff, puddle, alleyGround, dumpsterGreen, trashBag;
+        static Material shutterMetal, doorWood, lampPole, lampHead, lampHeadOff, lampGlow, lampBeam, puddle, alleyGround, dumpsterGreen, trashBag;
         static Material cardboard, pipeMetal, carGlass, tire, hydrantRed, alleyLampMat;
         static Material bloodDrop, bloodSplat, bloodSmear, bloodPool;
         static Material skin, dress, hair, rope, ropeKnot, socket;
@@ -352,13 +352,13 @@ namespace HangingWoman.EditorTools
             // Display window runs from the south end to just before the door at the north end.
             float winZ0 = z0 + 0.7f, winZ1 = z1 - 2.6f;
             float winZc = (winZ0 + winZ1) * 0.5f, winW = winZ1 - winZ0;
-            Material glass = shop.open ? Mat("Interior " + shop.name, shop.interior * 0.15f, 0.95f, 0f, shop.interior, 0.9f) : windowDark;
+            Material glass = shop.open ? Glow("Interior " + shop.name, shop.interior * 0.85f) : windowDark;
             NoShadows(Quad("Display Window", b, new Vector3(FrontX(side, 0.02f), y0 + 1.45f, winZc), FacadeRotation(side),
                 new Vector2(winW, 2.1f), glass));
             Box("Window Frame Top", b, new Vector3(FrontX(side, 0.05f), y0 + 2.55f, winZc), new Vector3(0.1f, 0.1f, winW + 0.2f), trim);
             Box("Window Base", b, new Vector3(FrontX(side, 0.05f), y0 + 0.2f, winZc), new Vector3(0.1f, 0.4f, winW + 0.2f), trim);
 
-            Material doorMat = shop.open ? Mat("Door " + shop.name, shop.interior * 0.1f, 0.95f, 0f, shop.interior, 0.5f) : doorWood;
+            Material doorMat = shop.open ? Glow("Door " + shop.name, shop.interior * 0.45f) : doorWood;
             NoShadows(Quad("Door", b, new Vector3(FrontX(side, 0.02f), y0 + 1.15f, z1 - 1.5f), FacadeRotation(side),
                 new Vector2(1.1f, 2.3f), doorMat));
             Box("Door Frame", b, new Vector3(FrontX(side, 0.05f), y0 + 2.35f, z1 - 1.5f), new Vector3(0.1f, 0.1f, 1.3f), trim);
@@ -448,10 +448,30 @@ namespace HangingWoman.EditorTools
             Prim(PrimitiveType.Cylinder, "Pole", lamp, new Vector3(x, SidewalkTop + 3f, z), new Vector3(0.14f, 3f, 0.14f), lampPole);
             Prim(PrimitiveType.Cylinder, "Base", lamp, new Vector3(x, SidewalkTop + 0.3f, z), new Vector3(0.26f, 0.3f, 0.26f), lampPole);
             Box("Arm", lamp, new Vector3(x - side * 0.7f, SidewalkTop + 6.05f, z), new Vector3(1.5f, 0.09f, 0.09f), lampPole, collider: false);
-            var head = Box("Head", lamp, new Vector3(x - side * 1.4f, SidewalkTop + 5.95f, z), new Vector3(0.65f, 0.16f, 0.35f),
-                lit ? lampHead : lampHeadOff, collider: false);
-            NoShadows(head);
+            var headPos = new Vector3(x - side * 1.4f, SidewalkTop + 5.95f, z);
+            NoShadows(Box("Head", lamp, headPos, new Vector3(0.65f, 0.16f, 0.35f), lampPole, collider: false));
+            NoShadows(Box("Lens", lamp, headPos + Vector3.down * 0.085f, new Vector3(0.52f, 0.02f, 0.26f), lit ? lampHead : lampHeadOff, collider: false));
             if (!lit) return;
+
+            // Soft glow around the bulb, turned toward the camera.
+            var halo = Quad("Glow", lamp, headPos + Vector3.down * 0.12f, Quaternion.identity, new Vector2(1.8f, 1.8f), lampGlow);
+            NoShadows(halo);
+            halo.GetComponent<Renderer>().receiveShadows = false;
+            halo.AddComponent<Billboard>();
+
+            // A faint cone of light falling through the rain, tilted like the spot below.
+            var beam = new GameObject("Light Beam");
+            beam.transform.SetParent(lamp, false);
+            beam.transform.localPosition = headPos + Vector3.down * 0.1f;
+            beam.transform.localRotation = Quaternion.Euler(-12f, 0f, 0f);
+            beam.AddComponent<MeshFilter>().sharedMesh = SaveMesh("Lamp Beam", BeamMesh(0.22f, 2.8f, 6.1f, 32, 0.12f));
+            var beamRenderer = beam.AddComponent<MeshRenderer>();
+            beamRenderer.sharedMaterial = lampBeam;
+            beamRenderer.shadowCastingMode = ShadowCastingMode.Off;
+            beamRenderer.receiveShadows = false;
+
+            // Lights the lamp head, the pole and the air right around it.
+            PointLight("Bulb Light", lamp, headPos + Vector3.down * 0.3f, Sodium, 1.2f, 4f);
 
             var spot = new GameObject("Lamp Light").AddComponent<Light>();
             spot.transform.SetParent(lamp, false);
@@ -460,7 +480,7 @@ namespace HangingWoman.EditorTools
             spot.type = LightType.Spot;
             spot.spotAngle = 120f;
             spot.range = 16f;
-            spot.intensity = 3.6f;
+            spot.intensity = 5f;
             spot.color = Sodium;
             spot.shadows = LightShadows.Soft;
             spot.shadowStrength = 0.8f;
@@ -516,7 +536,7 @@ namespace HangingWoman.EditorTools
             light.shadows = LightShadows.Soft;
             light.shadowStrength = 0.85f;
             var f = Flicker(lampBox, LightFlicker.Mode.NeonBuzz, new[] { light }, new Renderer[] { lampBox.GetComponent<Renderer>() });
-            f.emissionColor = new Color(0.75f, 0.85f, 0.75f) * 1.5f;
+            f.emissionColor = new Color(0.75f, 0.85f, 0.75f);
 
             // Trigger volume covering the alley.
             var trigger = new GameObject("Alley Trigger");
@@ -872,6 +892,42 @@ namespace HangingWoman.EditorTools
             return mesh;
         }
 
+        /// <summary>
+        /// Open cone hanging down along -Y, fading from `alpha` at the top to nothing at the
+        /// bottom through vertex colours. UVs sit in the centre of the glow texture so it's solid.
+        /// </summary>
+        static Mesh BeamMesh(float topRadius, float bottomRadius, float length, int segments, float alpha)
+        {
+            var verts = new List<Vector3>();
+            var colors = new List<Color>();
+            var uvs = new List<Vector2>();
+            for (int i = 0; i <= segments; i++)
+            {
+                float a = i / (float)segments * Mathf.PI * 2f;
+                var dir = new Vector3(Mathf.Sin(a), 0f, Mathf.Cos(a));
+                verts.Add(dir * topRadius);
+                verts.Add(dir * bottomRadius + Vector3.down * length);
+                colors.Add(new Color(1f, 1f, 1f, alpha));
+                colors.Add(new Color(1f, 1f, 1f, 0f));
+                uvs.Add(new Vector2(0.5f, 0.5f));
+                uvs.Add(new Vector2(0.5f, 0.5f));
+            }
+            var tris = new List<int>();
+            for (int i = 0; i < segments; i++)
+            {
+                int t0 = i * 2, b0 = t0 + 1, t1 = t0 + 2, b1 = t0 + 3;
+                tris.AddRange(new[] { t0, b0, t1, t1, b0, b1 });
+            }
+            var mesh = new Mesh { name = "Lamp Beam" };
+            mesh.SetVertices(verts);
+            mesh.SetColors(colors);
+            mesh.SetUVs(0, uvs);
+            mesh.SetTriangles(tris, 0);
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            return mesh;
+        }
+
         static Mesh SaveMesh(string name, Mesh mesh)
         {
             string path = $"{MeshDir}/{SafeName(name)}.asset";
@@ -907,7 +963,7 @@ namespace HangingWoman.EditorTools
             Box("Body", car, new Vector3(0f, 0.6f, 0f), new Vector3(1.8f, 0.65f, 4.4f), paint);
             Box("Cabin", car, new Vector3(0f, 1.18f, -0.25f), new Vector3(1.6f, 0.55f, 2.2f), carGlass);
             Box("Roof", car, new Vector3(0f, 1.47f, -0.25f), new Vector3(1.55f, 0.05f, 2.0f), paint, collider: false);
-            var tail = Mat("Tail Light", new Color(0.3f, 0.02f, 0.02f), 0.9f, 0f, new Color(0.6f, 0.02f, 0.02f), 0.4f);
+            var tail = Glow("Tail Light", new Color(0.3f, 0.02f, 0.02f));
             Box("Tail Light L", car, new Vector3(-0.65f, 0.7f, -2.21f), new Vector3(0.35f, 0.12f, 0.03f), tail, collider: false);
             Box("Tail Light R", car, new Vector3(0.65f, 0.7f, -2.21f), new Vector3(0.35f, 0.12f, 0.03f), tail, collider: false);
             foreach (float x in new[] { -0.85f, 0.85f })
@@ -1069,16 +1125,19 @@ namespace HangingWoman.EditorTools
             };
 
             windowDark = Mat("Window Dark", new Color(0.015f, 0.017f, 0.02f), 0.96f, 0.1f);
-            windowWarm = Mat("Window Lit Warm", new Color(0.1f, 0.07f, 0.04f), 0.9f, 0f, new Color(1f, 0.72f, 0.42f), 0.9f);
-            windowCool = Mat("Window Lit Cool", new Color(0.06f, 0.07f, 0.1f), 0.9f, 0f, new Color(0.65f, 0.75f, 1f), 0.6f);
-            windowTv = Mat("Window TV", new Color(0.03f, 0.04f, 0.08f), 0.9f, 0f, new Color(0.4f, 0.55f, 1f), 0.5f);
+            windowWarm = Glow("Window Lit Warm", new Color(0.9f, 0.65f, 0.38f));
+            windowCool = Glow("Window Lit Cool", new Color(0.4f, 0.45f, 0.6f));
+            windowTv = Glow("Window TV", new Color(0.2f, 0.28f, 0.5f));
 
             shutterMetal = Mat("Shutter Metal", new Color(0.25f, 0.25f, 0.26f), 0.55f, 0.7f);
             doorWood = Mat("Door Dark", new Color(0.06f, 0.04f, 0.03f), 0.5f);
             lampPole = Mat("Lamp Pole", new Color(0.06f, 0.07f, 0.06f), 0.6f, 0.8f);
-            lampHead = Mat("Lamp Head", new Color(0.3f, 0.2f, 0.1f), 0.7f, 0f, Sodium, 2f);
+            lampHead = Glow("Lamp Head", Color.Lerp(Sodium, Color.white, 0.35f));
             lampHeadOff = Mat("Lamp Head Off", new Color(0.04f, 0.035f, 0.03f), 0.85f, 0.1f);
-            alleyLampMat = Mat("Alley Lamp", new Color(0.3f, 0.35f, 0.3f), 0.7f, 0f, new Color(0.75f, 0.85f, 0.75f), 1.5f);
+            var glowTex = SoftDotTexture("glow_dot");
+            lampGlow = ParticleMat("Lamp Glow", glowTex, new Color(1f, 0.7f, 0.4f, 0.55f), additive: true);
+            lampBeam = ParticleMat("Lamp Beam", glowTex, new Color(1f, 0.72f, 0.42f, 0.5f), additive: true);
+            alleyLampMat = Glow("Alley Lamp", new Color(0.75f, 0.85f, 0.75f));
             puddle = Mat("Puddle", new Color(0.01f, 0.011f, 0.014f), 0.985f, 0f);
             dumpsterGreen = Mat("Dumpster", new Color(0.05f, 0.14f, 0.07f), 0.6f, 0.5f);
             trashBag = Mat("Trash Bag", new Color(0.015f, 0.015f, 0.015f), 0.9f);
@@ -1179,11 +1238,39 @@ namespace HangingWoman.EditorTools
             return m;
         }
 
-        static Material ParticleMat(string name, Texture2D tex, Color tint)
+        /// <summary>
+        /// A surface that is simply drawn at a fixed bright colour (bulbs, lit windows).
+        /// Unlit shaders always show, unlike emission, which depends on shader keywords.
+        /// </summary>
+        static Material Glow(string name, Color color)
+        {
+            string safe = SafeName(name);
+            if (matCache.TryGetValue(safe, out var cached)) return cached;
+
+            string path = $"{MatDir}/{safe}.mat";
+            var shader = urp ? Shader.Find("Universal Render Pipeline/Unlit") : Shader.Find("Unlit/Color");
+            if (shader == null) shader = Shader.Find("Unlit/Color");
+
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
+            bool isNew = mat == null;
+            if (isNew) mat = new Material(shader);
+            else mat.shader = shader;
+            mat.name = safe;
+            color.a = 1f;
+            SetColor(mat, color);
+
+            if (isNew) AssetDatabase.CreateAsset(mat, path);
+            else EditorUtility.SetDirty(mat);
+            matCache[safe] = mat;
+            return mat;
+        }
+
+        static Material ParticleMat(string name, Texture2D tex, Color tint, bool additive = false)
         {
             string safe = SafeName(name);
             string path = $"{MatDir}/{safe}.mat";
-            Shader shader = urp ? Shader.Find("Universal Render Pipeline/Particles/Unlit") : Shader.Find("Legacy Shaders/Particles/Alpha Blended");
+            Shader shader = urp ? Shader.Find("Universal Render Pipeline/Particles/Unlit")
+                : Shader.Find(additive ? "Legacy Shaders/Particles/Additive" : "Legacy Shaders/Particles/Alpha Blended");
             if (shader == null) shader = Shader.Find("Particles/Standard Unlit");
 
             var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
@@ -1196,9 +1283,10 @@ namespace HangingWoman.EditorTools
                 mat.SetTexture("_BaseMap", tex);
                 mat.SetColor("_BaseColor", tint);
                 mat.SetFloat("_Surface", 1f);
-                mat.SetFloat("_Blend", 0f);
+                mat.SetFloat("_Blend", additive ? 2f : 0f);
                 mat.SetInt("_SrcBlend", (int)BlendMode.SrcAlpha);
-                mat.SetInt("_DstBlend", (int)BlendMode.OneMinusSrcAlpha);
+                mat.SetInt("_DstBlend", (int)(additive ? BlendMode.One : BlendMode.OneMinusSrcAlpha));
+                if (mat.HasProperty("_Cull")) mat.SetFloat("_Cull", 0f);
                 mat.SetInt("_ZWrite", 0);
                 mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
                 mat.SetOverrideTag("RenderType", "Transparent");

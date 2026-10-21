@@ -19,6 +19,9 @@ namespace HangingWoman
         [Range(0f, 1f)] public float offLevel = 0.04f;
 
         static readonly int EmissionColorId = Shader.PropertyToID("_EmissionColor");
+        // Glowing parts use unlit shaders, whose colour lives in _Color (built-in) or _BaseColor (URP).
+        static readonly int ColorId = Shader.PropertyToID("_Color");
+        static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
 
         float[] baseIntensity;
         Color[] baseTextColor;
@@ -94,7 +97,11 @@ namespace HangingWoman
 
             if (emissiveRenderers.Length > 0)
             {
-                block.SetColor(EmissionColorId, emissionColor * level);
+                Color c = emissionColor * level;
+                c.a = 1f;
+                block.SetColor(EmissionColorId, c);
+                block.SetColor(ColorId, c);
+                block.SetColor(BaseColorId, c);
                 foreach (var r in emissiveRenderers)
                     if (r != null) r.SetPropertyBlock(block);
             }
