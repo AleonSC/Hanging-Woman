@@ -60,6 +60,21 @@ namespace HangingWoman
 
         /// <summary>Scales all movement speeds. Used by triggers to slow the player down.</summary>
         public float SpeedMultiplier { get; set; } = 1f;
+        /// <summary>When true, the player can't move or look; scripted events drive the camera through Yaw and Pitch.</summary>
+        public bool InputLocked { get; set; }
+        /// <summary>Body heading in degrees.</summary>
+        public float Yaw
+        {
+            get => transform.eulerAngles.y;
+            set => transform.rotation = Quaternion.Euler(0f, value, 0f);
+        }
+        /// <summary>Camera pitch in degrees; positive looks down, negative looks up.</summary>
+        public float Pitch
+        {
+            get => pitch;
+            set => pitch = Mathf.Clamp(value, -maxPitch, maxPitch);
+        }
+        public Vector3 EyePosition => playerCamera != null ? playerCamera.transform.position : transform.position + Vector3.up * standingEyeHeight;
         public bool IsCrouching => crouching;
         public bool IsGrounded => controller.isGrounded;
         public float CurrentSpeed => planarVelocity.magnitude;
@@ -111,12 +126,12 @@ namespace HangingWoman
         void Update()
         {
             HandleCursor();
-            if (Cursor.lockState == CursorLockMode.Locked) HandleLook();
+            if (Cursor.lockState == CursorLockMode.Locked && !InputLocked) HandleLook();
             HandleCrouch();
             HandleMovement();
             HandleHeadBob();
 
-            if (flashlight != null && FPInput.FlashlightPressed())
+            if (flashlight != null && !InputLocked && FPInput.FlashlightPressed())
                 flashlight.enabled = !flashlight.enabled;
         }
 
@@ -142,7 +157,7 @@ namespace HangingWoman
 
         void HandleCrouch()
         {
-            bool wantsCrouch = FPInput.CrouchHeld();
+            bool wantsCrouch = InputLocked ? crouching : FPInput.CrouchHeld();
             if (wantsCrouch) crouching = true;
             else if (crouching && CanStand()) crouching = false;
 
@@ -168,10 +183,10 @@ namespace HangingWoman
             float dt = Time.deltaTime;
             bool grounded = controller.isGrounded;
 
-            Vector2 input = FPInput.Move();
+            Vector2 input = InputLocked ? Vector2.zero : FPInput.Move();
             if (input.sqrMagnitude > 1f) input.Normalize();
 
-            sprinting = !crouching && FPInput.SprintHeld() && input.y > 0.1f;
+            sprinting = !InputLocked && !crouching && FPInput.SprintHeld() && input.y > 0.1f;
             float speed = crouching ? crouchSpeed : sprinting ? sprintSpeed : walkSpeed;
             speed *= SpeedMultiplier;
 
@@ -183,7 +198,7 @@ namespace HangingWoman
             {
                 if (!wasGrounded && fallSpeed < -4f) PlayFootstep(Mathf.Clamp01(-fallSpeed / 10f) + 0.4f);
                 if (verticalVelocity < 0f) verticalVelocity = -2f;
-                if (allowJump && !crouching && FPInput.JumpPressed())
+                if (allowJump && !crouching && !InputLocked && FPInput.JumpPressed())
                     verticalVelocity = Mathf.Sqrt(jumpHeight * -2f * gravity);
             }
             verticalVelocity += gravity * dt;

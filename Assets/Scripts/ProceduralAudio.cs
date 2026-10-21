@@ -124,6 +124,60 @@ namespace HangingWoman
             return Finish("Footstep " + seed, data, 0.9f);
         }
 
+        /// <summary>
+        /// A taut rope creaking under load: stick-slip pulses whose rate rises and falls,
+        /// each one ringing a couple of woody resonances.
+        /// </summary>
+        public static AudioClip CreateRopeCreak(int seed = 3, float seconds = 1.5f)
+        {
+            var rng = new System.Random(seed);
+            int n = (int)(seconds * SampleRate);
+            var data = new float[n];
+
+            float[] freqs = { 480f, 1130f, 2300f };
+            float[] gains = { 1f, 0.55f, 0.2f };
+            var y1 = new float[freqs.Length];
+            var y2 = new float[freqs.Length];
+            var a1 = new float[freqs.Length];
+            var a2 = new float[freqs.Length];
+            for (int k = 0; k < freqs.Length; k++)
+            {
+                float r = Mathf.Exp(-Mathf.PI * 70f / SampleRate);
+                a1[k] = 2f * r * Mathf.Cos(2f * Mathf.PI * freqs[k] / SampleRate);
+                a2[k] = -r * r;
+            }
+
+            float phase = 0f;
+            for (int i = 0; i < n; i++)
+            {
+                float t = i / (float)seconds / SampleRate;
+                // Two strains: a long groan and a short tail.
+                float env = Mathf.Pow(Mathf.Sin(Mathf.Clamp01(t / 0.75f) * Mathf.PI), 0.6f)
+                          + 0.45f * Mathf.Pow(Mathf.Sin(Mathf.Clamp01((t - 0.72f) / 0.28f) * Mathf.PI), 0.8f);
+                float rate = 18f + 70f * env + (float)rng.NextDouble() * 8f;
+                phase += rate / SampleRate;
+
+                float impulse = 0f;
+                if (phase >= 1f)
+                {
+                    phase -= 1f;
+                    impulse = env * (0.6f + (float)rng.NextDouble() * 0.4f);
+                }
+
+                float fiber = (float)(rng.NextDouble() * 2.0 - 1.0) * 0.02f * env;
+                float sample = 0f;
+                for (int k = 0; k < freqs.Length; k++)
+                {
+                    float y = a1[k] * y1[k] + a2[k] * y2[k] + impulse + fiber;
+                    y2[k] = y1[k];
+                    y1[k] = y;
+                    sample += y * gains[k];
+                }
+                data[i] = sample * Mathf.Min(1f, (seconds - i / (float)SampleRate) * 20f);
+            }
+            return Finish("Rope Creak " + seed, data, 0.8f);
+        }
+
         static float[] CrossfadeLoop(float[] data, int fade)
         {
             int length = data.Length - fade;

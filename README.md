@@ -3,6 +3,7 @@
 A first person horror walk: it's raining, it's late, and you're walking down a city street past
 laundromats, noodle bars and a dying pawn-shop sign. About halfway down, across the street on
 your left, a street lamp lights up two parallel trails of blood running from the road into an alley.
+At the end of the alley a woman hangs from a rope that rises into the sky, her back to you.
 
 ## Opening the project
 
@@ -49,8 +50,14 @@ Gamepad works too if the project uses the new Input System.
   then run past the dumpster to a second pool by the back door, with a smear down the wall.
 - **The alley:** on the left (west) side, about halfway down the street. It has a dumpster, trash bags, boxes, pipes and a buzzing caged wall lamp.
   `Alley Trigger` slows the player while they're inside and has `onPlayerEnter` /
-  `onPlayerExit` UnityEvents to hook into. `Trail End (Event Anchor)` marks where the trail
-  ends, for whatever happens next.
+  `onPlayerExit` UnityEvents to hook into.
+- **The hanging woman:** she hangs above the pool at the end of the trail, in a dirty white
+  dress, with long wet black hair and her back to you. She's completely limp: her head lolls,
+  her arms hang, her toes point at the ground, and she twists slowly on the rope. The rope rises
+  straight up until the fog swallows it. Get within 3 m and the camera takes over. It tilts
+  up the rope until she's out of frame, the rope creaks while she turns on it, and when the
+  camera comes back down she's facing you. Control returns after a few seconds. Timings,
+  trigger distance and `onTriggered` / `onRevealed` events are on `HangingWomanEvent`.
 
 ## Scripts
 
@@ -61,7 +68,9 @@ Gamepad works too if the project uses the new Input System.
 | `LightningStorm` | Random lightning flashes and delayed thunder. |
 | `LightFlicker` | Gentle, neon-buzz or broken flicker for lights, emissive surfaces and sign text. |
 | `AlleyTrigger` | Trigger volume that slows the player and fires events. |
-| `ProceduralAudio` | Generates the rain, thunder and footstep sounds, so no audio files are needed. Assign real clips in the inspector to replace them. |
+| `HangingWomanEvent` | The look-up / creak / look-down scare, driving the player's camera. |
+| `HangingBody` | Limp twisting and sway on the rope, and turning to face a point. |
+| `ProceduralAudio` | Generates the rain, thunder, footstep and rope-creak sounds, so no audio files are needed. Assign real clips in the inspector to replace them. |
 | `QualityBootstrap` | Raises the per-pixel light count, since the built-in pipeline only allows a few by default. |
 | `Editor/NightStreetSceneBuilder` | Builds and saves the whole scene. |
 

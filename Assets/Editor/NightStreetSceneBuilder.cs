@@ -24,6 +24,7 @@ namespace HangingWoman.EditorTools
         const string Root = "Assets";
         const string MatDir = Root + "/Generated/Materials";
         const string TexDir = Root + "/Generated/Textures";
+        const string MeshDir = Root + "/Generated/Meshes";
         const string SceneDir = Root + "/Scenes";
         public const string ScenePath = SceneDir + "/NightStreet.unity";
 
@@ -53,6 +54,7 @@ namespace HangingWoman.EditorTools
         static Material shutterMetal, doorWood, lampPole, lampHead, puddle, alleyGround, dumpsterGreen, trashBag;
         static Material cardboard, pipeMetal, carGlass, tire, hydrantRed, alleyLampMat;
         static Material bloodDrop, bloodSplat, bloodSmear, bloodPool;
+        static Material skin, dress, hair, rope, ropeKnot, socket;
         static Material[] wallPalette;
 
         [MenuItem("Hanging Woman/Build Night Street Scene", priority = 0)]
@@ -80,6 +82,7 @@ namespace HangingWoman.EditorTools
 
             Directory.CreateDirectory(MatDir);
             Directory.CreateDirectory(TexDir);
+            Directory.CreateDirectory(MeshDir);
             Directory.CreateDirectory(SceneDir);
             AssetDatabase.Refresh();
 
@@ -102,6 +105,7 @@ namespace HangingWoman.EditorTools
             var sky = BuildSkyLight();
             var player = BuildPlayer();
             BuildWeather(player.transform, sky);
+            BuildHangingWoman(player.GetComponent<FirstPersonController>());
             new GameObject("Game Settings").AddComponent<QualityBootstrap>();
 
             AssetDatabase.SaveAssets();
@@ -493,7 +497,7 @@ namespace HangingWoman.EditorTools
             var f = Flicker(lampBox, LightFlicker.Mode.NeonBuzz, new[] { light }, new Renderer[] { lampBox.GetComponent<Renderer>() });
             f.emissionColor = new Color(0.75f, 0.85f, 0.75f) * 1.5f;
 
-            // Trigger volume + an anchor marking where the trail ends, for the next scene beat.
+            // Trigger volume covering the alley.
             var trigger = new GameObject("Alley Trigger");
             trigger.layer = 2;
             trigger.transform.SetParent(parent, false);
@@ -503,9 +507,6 @@ namespace HangingWoman.EditorTools
             box.size = new Vector3(AlleyDepth - 0.5f, 3f, width);
             trigger.AddComponent<AlleyTrigger>();
 
-            var anchor = new GameObject("Trail End (Event Anchor)");
-            anchor.transform.SetParent(parent, false);
-            anchor.transform.position = new Vector3(AX(26.4f), SidewalkTop, AlleyZMax - 1.4f);
         }
 
         // ------------------------------------------------------------------ Blood trail
@@ -650,6 +651,212 @@ namespace HangingWoman.EditorTools
             float y = surface + 0.005f + (decalIndex++ % 16) * 0.0004f;
             var q = Quad(m.name, parent, new Vector3(xz.x, y, xz.y), rotation, size, m);
             NoShadows(q);
+        }
+
+        // ------------------------------------------------------------------ The hanging woman
+
+        const float RopeHeight = 140f;
+
+        static void BuildHangingWoman(FirstPersonController player)
+        {
+            // Hangs over the pool at the end of the trail, toes half a metre off the ground,
+            // back turned to the alley mouth (facing the back wall).
+            const float neckToToes = 1.42f;
+            var neck = new Vector3(AX(25.7f), SidewalkTop + 0.5f + neckToToes, AlleyZMin + 3.2f);
+
+            var root = new GameObject("Hanging Woman").transform;
+            root.position = neck;
+
+            var bodyT = Group("Body", root);
+            bodyT.rotation = Quaternion.Euler(0f, AlleySide * 90f, 0f);
+            var body = bodyT.gameObject.AddComponent<HangingBody>();
+            var blocker = bodyT.gameObject.AddComponent<CapsuleCollider>();
+            blocker.center = new Vector3(0f, -0.7f, 0f);
+            blocker.height = 1.6f;
+            blocker.radius = 0.22f;
+
+            // Head lolls forward and over to one side, the way a noose leaves it.
+            var head = Group("Head", bodyT);
+            head.localPosition = new Vector3(0f, 0.02f, 0f);
+            head.localRotation = Quaternion.Euler(20f, 0f, 24f);
+            Part(PrimitiveType.Sphere, "Skull", head, new Vector3(0f, 0.12f, 0.015f), new Vector3(0.18f, 0.22f, 0.2f), skin);
+            Part(PrimitiveType.Sphere, "Hair Cap", head, new Vector3(0f, 0.15f, -0.028f), new Vector3(0.192f, 0.225f, 0.192f), hair);
+            Part(PrimitiveType.Sphere, "Eye Socket L", head, new Vector3(-0.038f, 0.13f, 0.098f), new Vector3(0.042f, 0.03f, 0.03f), socket);
+            Part(PrimitiveType.Sphere, "Eye Socket R", head, new Vector3(0.038f, 0.13f, 0.098f), new Vector3(0.042f, 0.03f, 0.03f), socket);
+            Part(PrimitiveType.Sphere, "Mouth", head, new Vector3(0.004f, 0.055f, 0.093f), new Vector3(0.04f, 0.022f, 0.02f), socket);
+            var face = Group("Face (Look Target)", head);
+            face.localPosition = new Vector3(0f, 0.11f, 0.1f);
+
+            // Long hair hangs straight down, so it lives on the body rather than the tilted head.
+            var hairRoot = Group("Hair", bodyT);
+            Part(PrimitiveType.Cube, "Hair Back", hairRoot, new Vector3(-0.035f, -0.12f, -0.095f), new Vector3(0.22f, 0.62f, 0.03f), hair);
+            for (int i = 0; i < 12; i++)
+            {
+                float x = Mathf.Lerp(-0.15f, 0.08f, i / 11f) + R(-0.01f, 0.01f);
+                float length = R(0.55f, 0.8f);
+                Part(PrimitiveType.Cube, "Strand", hairRoot, new Vector3(x, 0.2f - length * 0.5f, R(-0.11f, -0.075f)),
+                    new Vector3(R(0.03f, 0.055f), length, 0.014f), hair, new Vector3(R(-3f, 3f), R(-15f, 15f), R(-2f, 2f)));
+            }
+            foreach (float x in new[] { -0.15f, 0.07f })
+            {
+                // Over the shoulders.
+                float length = R(0.45f, 0.6f);
+                Part(PrimitiveType.Cube, "Strand Side", hairRoot, new Vector3(x, 0.15f - length * 0.5f, R(0.0f, 0.05f)),
+                    new Vector3(0.035f, length, 0.03f), hair, new Vector3(0f, R(-10f, 10f), 0f));
+            }
+            // Hanging in front of the face, with a gap she looks through.
+            float[] front = { -0.13f, -0.1f, -0.065f, 0.0f, 0.03f };
+            foreach (float x in front)
+            {
+                float length = R(0.42f, 0.6f);
+                Part(PrimitiveType.Cube, "Strand Front", hairRoot, new Vector3(x, 0.18f - length * 0.5f, R(0.18f, 0.2f)),
+                    new Vector3(R(0.022f, 0.04f), length, 0.01f), hair, new Vector3(R(-4f, 4f), R(-12f, 12f), R(-3f, 3f)));
+            }
+
+            Part(PrimitiveType.Cylinder, "Neck", bodyT, new Vector3(0f, -0.02f, 0f), new Vector3(0.075f, 0.05f, 0.075f), skin);
+            Part(PrimitiveType.Capsule, "Torso", bodyT, new Vector3(0f, -0.27f, 0.005f), new Vector3(0.3f, 0.24f, 0.19f), dress);
+            Part(PrimitiveType.Capsule, "Hips", bodyT, new Vector3(0f, -0.5f, 0f), new Vector3(0.29f, 0.15f, 0.2f), dress, new Vector3(0f, 0f, 90f));
+
+            var skirt = new GameObject("Skirt");
+            skirt.transform.SetParent(bodyT, false);
+            skirt.transform.localPosition = new Vector3(0f, -0.43f, 0f);
+            skirt.AddComponent<MeshFilter>().sharedMesh = SaveMesh("Dress Skirt", SkirtMesh(0.15f, 0.29f, 0.72f, 30, 7, 5));
+            skirt.AddComponent<MeshRenderer>().sharedMaterial = dress;
+
+            foreach (int s in new[] { -1, 1 })
+            {
+                string sideName = s < 0 ? "R" : "L";
+                Part(PrimitiveType.Cylinder, "Sleeve " + sideName, bodyT, new Vector3(s * 0.165f, -0.11f, 0f), new Vector3(0.09f, 0.05f, 0.09f), dress, new Vector3(0f, 0f, s * 6f));
+                Part(PrimitiveType.Capsule, "Upper Arm " + sideName, bodyT, new Vector3(s * 0.175f, -0.21f, 0f), new Vector3(0.07f, 0.15f, 0.07f), skin, new Vector3(-3f, 0f, s * 4f));
+                Part(PrimitiveType.Capsule, "Forearm " + sideName, bodyT, new Vector3(s * 0.19f, -0.48f, 0.02f), new Vector3(0.06f, 0.14f, 0.06f), skin, new Vector3(-6f, 0f, s * 2f));
+                Part(PrimitiveType.Sphere, "Hand " + sideName, bodyT, new Vector3(s * 0.195f, -0.68f, 0.035f), new Vector3(0.055f, 0.11f, 0.035f), skin, new Vector3(-8f, s * 15f, 0f));
+
+                // One leg hangs slightly bent; toes point at the ground.
+                float bend = s < 0 ? 6f : -2f;
+                Part(PrimitiveType.Capsule, "Thigh " + sideName, bodyT, new Vector3(s * 0.07f, -0.76f, 0f), new Vector3(0.1f, 0.2f, 0.1f), skin);
+                Part(PrimitiveType.Capsule, "Calf " + sideName, bodyT, new Vector3(s * 0.07f, -1.12f, 0.01f), new Vector3(0.07f, 0.15f, 0.07f), skin, new Vector3(bend, 0f, 0f));
+                Part(PrimitiveType.Cube, "Foot " + sideName, bodyT, new Vector3(s * 0.07f, -1.34f, 0.025f), new Vector3(0.065f, 0.16f, 0.08f), skin, new Vector3(12f + bend, s * 5f, 0f));
+            }
+
+            // Noose: a ring around the neck, a knot behind one ear, and the rope straight up.
+            var noose = new GameObject("Noose");
+            noose.transform.SetParent(bodyT, false);
+            noose.transform.localPosition = new Vector3(0f, 0.0f, -0.005f);
+            noose.transform.localRotation = Quaternion.Euler(-14f, 0f, 0f);
+            noose.AddComponent<MeshFilter>().sharedMesh = SaveMesh("Noose Ring", TorusMesh(0.052f, 0.014f, 24, 8));
+            noose.AddComponent<MeshRenderer>().sharedMaterial = ropeKnot;
+
+            var knotPos = new Vector3(0.035f, 0.05f, -0.075f);
+            Part(PrimitiveType.Cylinder, "Knot", bodyT, knotPos, new Vector3(0.04f, 0.055f, 0.04f), ropeKnot);
+            // The rope rises straight up until the fog swallows it.
+            Part(PrimitiveType.Cylinder, "Rope", bodyT, knotPos + Vector3.up * (RopeHeight * 0.5f), new Vector3(0.024f, RopeHeight * 0.5f, 0.024f), rope);
+
+            var creak = new GameObject("Creak").AddComponent<AudioSource>();
+            creak.transform.SetParent(bodyT, false);
+            creak.transform.localPosition = new Vector3(0f, 0.3f, 0f);
+            creak.spatialBlend = 0.7f;
+            creak.minDistance = 2f;
+            creak.playOnAwake = false;
+
+            var ev = root.gameObject.AddComponent<HangingWomanEvent>();
+            ev.player = player;
+            ev.body = body;
+            ev.lookTarget = face;
+            ev.creakSource = creak;
+        }
+
+        /// <summary>A collider-less, shadow-casting body part.</summary>
+        static GameObject Part(PrimitiveType type, string name, Transform parent, Vector3 pos, Vector3 scale, Material m, Vector3 euler = default) =>
+            Prim(type, name, parent, pos, scale, m, euler, collider: false);
+
+        /// <summary>A flared tube with a ragged, uneven hem, double sided so it reads from below.</summary>
+        static Mesh SkirtMesh(float topRadius, float bottomRadius, float height, int segments, int rings, int seed)
+        {
+            var r = new System.Random(seed);
+            var hem = new float[segments + 1];
+            for (int i = 0; i <= segments; i++) hem[i] = i == segments ? hem[0] : (float)r.NextDouble() * 0.07f;
+
+            var verts = new List<Vector3>();
+            var uvs = new List<Vector2>();
+            for (int ring = 0; ring <= rings; ring++)
+            {
+                float t = ring / (float)rings;
+                for (int i = 0; i <= segments; i++)
+                {
+                    float a = i / (float)segments * Mathf.PI * 2f;
+                    float wrinkle = 1f + 0.06f * t * Mathf.Sin(a * 7f + t * 2f) + 0.03f * t * Mathf.Sin(a * 13f);
+                    float radius = Mathf.Lerp(topRadius, bottomRadius, t) * wrinkle;
+                    float y = -height * t - (ring == rings ? hem[i] : 0f);
+                    verts.Add(new Vector3(Mathf.Sin(a) * radius, y, Mathf.Cos(a) * radius * 0.85f));
+                    uvs.Add(new Vector2(i / (float)segments, 1f - t));
+                }
+            }
+
+            int count = verts.Count;
+            verts.AddRange(verts.ToArray());
+            uvs.AddRange(uvs.ToArray());
+
+            var tris = new List<int>();
+            int row = segments + 1;
+            for (int ring = 0; ring < rings; ring++)
+            {
+                for (int i = 0; i < segments; i++)
+                {
+                    int a = ring * row + i, b = a + 1, c = a + row, d = c + 1;
+                    tris.AddRange(new[] { a, c, b, b, c, d });                                 // outside
+                    tris.AddRange(new[] { count + a, count + b, count + c, count + b, count + d, count + c }); // inside
+                }
+            }
+
+            var mesh = new Mesh { name = "Dress Skirt" };
+            mesh.SetVertices(verts);
+            mesh.SetUVs(0, uvs);
+            mesh.SetTriangles(tris, 0);
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            return mesh;
+        }
+
+        static Mesh TorusMesh(float radius, float tube, int segments, int sides)
+        {
+            var verts = new List<Vector3>();
+            var uvs = new List<Vector2>();
+            for (int i = 0; i <= segments; i++)
+            {
+                float a = i / (float)segments * Mathf.PI * 2f;
+                var center = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a)) * radius;
+                for (int j = 0; j <= sides; j++)
+                {
+                    float b = j / (float)sides * Mathf.PI * 2f;
+                    verts.Add(center + (center.normalized * Mathf.Cos(b) + Vector3.up * Mathf.Sin(b)) * tube);
+                    uvs.Add(new Vector2(j / (float)sides, i / (float)segments * 12f));
+                }
+            }
+            var tris = new List<int>();
+            int row = sides + 1;
+            for (int i = 0; i < segments; i++)
+            {
+                for (int j = 0; j < sides; j++)
+                {
+                    int a = i * row + j, b = a + 1, c = a + row, d = c + 1;
+                    tris.AddRange(new[] { a, b, c, b, d, c });
+                }
+            }
+            var mesh = new Mesh { name = "Noose Ring" };
+            mesh.SetVertices(verts);
+            mesh.SetUVs(0, uvs);
+            mesh.SetTriangles(tris, 0);
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            return mesh;
+        }
+
+        static Mesh SaveMesh(string name, Mesh mesh)
+        {
+            string path = $"{MeshDir}/{SafeName(name)}.asset";
+            if (AssetDatabase.LoadAssetAtPath<Mesh>(path) != null) AssetDatabase.DeleteAsset(path);
+            AssetDatabase.CreateAsset(mesh, path);
+            return mesh;
         }
 
         // ------------------------------------------------------------------ Props
@@ -865,6 +1072,15 @@ namespace HangingWoman.EditorTools
             bloodSplat = Cutout(Mat("Blood Splatter", bloodColor, 0.9f, 0f, tex: BloodTexture("blood_splatter", BloodShape.Splatter, 23)));
             bloodSmear = Cutout(Mat("Blood Smear", bloodColor * 0.85f, 0.88f, 0f, tex: BloodTexture("blood_smear", BloodShape.Smear, 37)));
             bloodPool = Cutout(Mat("Blood Pool", bloodColor * 0.8f, 0.96f, 0f, tex: BloodTexture("blood_pool", BloodShape.Pool, 51)));
+
+            // The woman: grey-pale skin, a soaked and filthy white dress, wet black hair.
+            skin = Mat("Skin Pale", new Color(0.6f, 0.59f, 0.58f), 0.35f, 0f, tex: NoiseTexture("skin_mottle", 128, 0.82f, 1f, 6, specks: false));
+            dress = Mat("Dress Dirty White", new Color(0.86f, 0.84f, 0.8f), 0.4f, 0f, tex: DressTexture("dress_grime", 256));
+            hair = Mat("Hair Wet Black", new Color(0.012f, 0.012f, 0.014f), 0.8f);
+            socket = Mat("Eye Socket", new Color(0.01f, 0.005f, 0.005f), 0.9f);
+            var ropeTex = RopeTexture("rope_braid", 64);
+            rope = Mat("Rope", new Color(0.33f, 0.27f, 0.18f), 0.25f, 0f, tex: ropeTex, tiling: new Vector2(1f, 1200f)); // ~12cm twist along 140m
+            ropeKnot = Mat("Rope Knot", new Color(0.33f, 0.27f, 0.18f), 0.25f, 0f, tex: ropeTex);
         }
 
         static Material Mat(string name, Color albedo, float smoothness, float metallic = 0f, Color? emission = null,
@@ -1043,6 +1259,44 @@ namespace HangingWoman.EditorTools
                 a = a * a;
                 return new Color(1f, 1f, 1f, a);
             }, true, TextureWrapMode.Clamp);
+        }
+
+        /// <summary>Off-white cloth: grime blotches, mud rising from the hem, old blood down the front.</summary>
+        static Texture2D DressTexture(string name, int size)
+        {
+            return SaveTexture(name, size, (x, y) =>
+            {
+                float u = x / (float)size, v = y / (float)size;
+                float weave = 0.94f + 0.06f * Mathf.PerlinNoise(u * 180f, v * 40f);
+                float grime = Fbm(u, v, 6, 4, 77);
+                float mud = Mathf.Clamp01((0.35f - v) * 3f) * Fbm(u, v, 12, 3, 91);
+                Color c = new Color(1f, 0.98f, 0.93f) * weave;
+                c = Color.Lerp(c, new Color(0.45f, 0.38f, 0.28f), Mathf.Clamp01((grime - 0.5f) * 2.2f) * 0.6f);
+                c = Color.Lerp(c, new Color(0.25f, 0.2f, 0.14f), mud * 0.9f);
+
+                // Dried blood running down the front from the collar (front is around u = 0 and 1).
+                float front = Mathf.Min(u, 1f - u);
+                float drip = Mathf.PerlinNoise(u * 40f, 3.1f);
+                float bloodStreak = front < 0.12f && drip > 0.55f && v > 0.25f + (1f - drip) * 0.6f ? 1f : 0f;
+                float bloodPatch = Mathf.Clamp01((Fbm(u, v, 5, 3, 13) - 0.62f) * 6f) * (v > 0.6f ? 1f : 0.3f);
+                c = Color.Lerp(c, new Color(0.3f, 0.04f, 0.03f), Mathf.Max(bloodStreak * 0.85f, bloodPatch * 0.7f));
+                c.a = 1f;
+                return c;
+            }, false, TextureWrapMode.Repeat);
+        }
+
+        /// <summary>Diagonal twisted-fibre stripes for the rope.</summary>
+        static Texture2D RopeTexture(string name, int size)
+        {
+            return SaveTexture(name, size, (x, y) =>
+            {
+                float u = x / (float)size, v = y / (float)size;
+                float strand = Mathf.Repeat(u * 3f + v * 1f, 1f);
+                float groove = Mathf.SmoothStep(0f, 0.25f, strand) * Mathf.SmoothStep(1f, 0.75f, strand);
+                float fibre = 0.85f + 0.15f * Mathf.PerlinNoise(u * 60f, v * 20f);
+                float value = Mathf.Lerp(0.45f, 1f, groove) * fibre;
+                return new Color(value, value, value, 1f);
+            }, false, TextureWrapMode.Repeat);
         }
 
         enum BloodShape { Drop, Splatter, Smear, Pool }
