@@ -138,7 +138,29 @@ namespace HangingWoman
         void HandleCursor()
         {
             if (FPInput.EscapePressed()) LockCursor(false);
-            else if (Cursor.lockState != CursorLockMode.Locked && FPInput.ClickPressed()) LockCursor(true);
+            else if (Cursor.lockState != CursorLockMode.Locked && FPInput.ClickPressed() && PointerInsideGame()) LockCursor(true);
+        }
+
+        /// <summary>
+        /// Only clicks on the game itself recapture the mouse. Otherwise clicking the editor's
+        /// Stop/Pause buttons would relock the cursor mid-click and swallow the click.
+        /// </summary>
+        static bool PointerInsideGame()
+        {
+            if (!Application.isFocused) return false;
+            Vector2 p = FPInput.PointerPosition();
+            return p.x >= 0f && p.y >= 0f && p.x <= Screen.width && p.y <= Screen.height;
+        }
+
+        void OnApplicationFocus(bool hasFocus)
+        {
+            if (!hasFocus) LockCursor(false);
+        }
+
+        void OnDisable()
+        {
+            // Always hand the mouse back, e.g. when leaving play mode.
+            LockCursor(false);
         }
 
         static void LockCursor(bool locked)
@@ -294,6 +316,7 @@ namespace HangingWoman
                 (Keyboard.current?.fKey.wasPressedThisFrame ?? false) || (Gamepad.current?.buttonNorth.wasPressedThisFrame ?? false);
             public static bool EscapePressed() => Keyboard.current?.escapeKey.wasPressedThisFrame ?? false;
             public static bool ClickPressed() => Mouse.current?.leftButton.wasPressedThisFrame ?? false;
+            public static Vector2 PointerPosition() => Mouse.current != null ? Mouse.current.position.ReadValue() : new Vector2(-1f, -1f);
 #else
             public static Vector2 Move() => new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
             public static Vector2 Look() => new Vector2(Input.GetAxis("Mouse X"), Input.GetAxis("Mouse Y"));
@@ -303,6 +326,7 @@ namespace HangingWoman
             public static bool FlashlightPressed() => Input.GetKeyDown(KeyCode.F);
             public static bool EscapePressed() => Input.GetKeyDown(KeyCode.Escape);
             public static bool ClickPressed() => Input.GetMouseButtonDown(0);
+            public static Vector2 PointerPosition() => Input.mousePosition;
 #endif
         }
     }
