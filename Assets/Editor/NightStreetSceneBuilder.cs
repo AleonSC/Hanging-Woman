@@ -1585,14 +1585,13 @@ namespace HangingWoman.EditorTools
     }
 
     /// <summary>
-    /// Builds the scene the first time the project is opened, and offers to rebuild it whenever
-    /// the builder has changed since the scene was last built (e.g. after pulling an update).
+    /// Builds the scene the first time the project is opened. If the scene was built by an
+    /// older version of the builder, it says so (without blocking the editor) instead of
+    /// rebuilding over it.
     /// </summary>
     [InitializeOnLoad]
     static class NightStreetAutoBuild
     {
-        const string DeclinedKey = "HangingWoman.DeclinedRebuildVersion";
-
         static NightStreetAutoBuild()
         {
             EditorApplication.delayCall += Check;
@@ -1602,22 +1601,15 @@ namespace HangingWoman.EditorTools
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode || NightStreetSceneBuilder.SceneIsCurrent) return;
 
-            if (File.Exists(NightStreetSceneBuilder.ScenePath))
+            if (!File.Exists(NightStreetSceneBuilder.ScenePath))
             {
-                if (SessionState.GetInt(DeclinedKey, 0) == NightStreetSceneBuilder.SceneVersion) return;
-                bool rebuild = EditorUtility.DisplayDialog("Hanging Woman",
-                    "The NightStreet scene was built by an older version of the scene builder, so it is missing recent changes.\n\n" +
-                    "Rebuild it now? (This replaces the scene.)", "Rebuild", "Later");
-                if (!rebuild)
-                {
-                    SessionState.SetInt(DeclinedKey, NightStreetSceneBuilder.SceneVersion);
-                    Debug.LogWarning("[Hanging Woman] NightStreet is out of date. Use Hanging Woman > Build Night Street Scene to update it.");
-                    return;
-                }
+                NightStreetSceneBuilder.Build();
+                return;
             }
 
-            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
-            NightStreetSceneBuilder.Build();
+            const string message = "NightStreet is out of date. Run Hanging Woman > Build Night Street Scene to update it.";
+            Debug.LogWarning("[Hanging Woman] " + message);
+            SceneView.lastActiveSceneView?.ShowNotification(new GUIContent(message), 8.0);
         }
     }
 }

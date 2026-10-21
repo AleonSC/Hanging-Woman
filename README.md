@@ -13,8 +13,9 @@ At the end of the alley a woman hangs from a rope that rises into the sky, her b
 2. When the project first opens, the scene builds itself and is saved to
    `Assets/Scenes/NightStreet.unity`.
    You can rebuild it at any time with **Hanging Woman → Build Night Street Scene**.
-   If you pull an update while the project already has a scene, Unity offers to rebuild it,
-   because an old scene won't include the new changes. **Hanging Woman → Find Hanging Woman**
+   If you pull an update while the project already has a scene, the Console and Scene view
+   warn you that it's out of date. Rebuild it from that menu, because an old scene won't
+   include the new changes. **Hanging Woman → Find Hanging Woman**
    selects her in the Scene view, and offers a rebuild if she's missing.
 3. Press **Play**.
 
