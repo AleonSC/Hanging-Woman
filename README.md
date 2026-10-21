@@ -56,8 +56,13 @@ Gamepad works too if the project uses the new Input System.
 - **The alley:** on the left (west) side, about halfway down the street. It has a dumpster, trash bags, boxes, pipes and a buzzing caged wall lamp.
   `Alley Trigger` slows the player while they're inside and has `onPlayerEnter` /
   `onPlayerExit` UnityEvents to hook into.
-- **The hanging woman:** she's a physics ragdoll in a dirty white dress, with long wet black
-  hair. She stands limp in the pool where the two trails end, held up by the neck on a rope that
+- **The hanging woman:** she's a physics ragdoll covered by a single generated body mesh that
+  bends with her joints. She has a sculpted face: sunken, half-lidded clouded eyes, a nose,
+  parted bluish lips, ears, and blood trickling from her nose and mouth. Her hands have
+  fingers, her feet have toes, and her skin is mottled: veins, bruises, dirt, purple pooling
+  in her hands and feet, and the raw mark of the noose around her neck. Her long wet black
+  hair and the skirt of her filthy white dress are simulated cloth, so they sway and drag as
+  she moves. She stands limp in the pool where the two trails end, held up by the neck on a rope that
   rises until the fog swallows it, with her back to you. Get within 3 m and the camera takes over:
   1. It tilts up the rope until she's out of frame.
   2. The rope creaks and twists her around.
@@ -81,10 +86,11 @@ Gamepad works too if the project uses the new Input System.
 | `HangingWomanEvent` | The scare sequence, driving the player's camera. |
 | `HangingRagdoll` | Moves the rope's anchor to turn and drag the ragdoll, and draws the rope. |
 | `FootBloodTrail` | Leaves blood smears wherever a foot drags along the ground. |
+| `ClothPinning` | Pins her skirt at the waist and her hair at the scalp, leaving the rest free. |
 | `Billboard` | Turns lamp glows toward the camera. |
 | `ProceduralAudio` | Generates the rain, thunder, footstep and rope-creak sounds, so no audio files are needed. Assign real clips in the inspector to replace them. |
 | `QualityBootstrap` | Raises the per-pixel light count, since the built-in pipeline only allows a few by default. |
-| `Editor/NightStreetSceneBuilder` | Builds and saves the whole scene. |
+| `Editor/NightStreetSceneBuilder` | Builds and saves the whole scene (`.Woman.cs` builds her body, face, hair and skin). |
 
 ## Tips
 
