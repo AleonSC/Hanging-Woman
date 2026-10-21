@@ -22,6 +22,9 @@ namespace HangingWoman
         public AudioSource creakSource;
         [Tooltip("Leave empty to use a generated creak.")]
         public AudioClip creakClip;
+        [Tooltip("Looping rope strain played while she's dragged. Leave empty to use a generated one.")]
+        public AudioClip strainLoop;
+        [Range(0f, 1f)] public float strainVolume = 0.6f;
 
         [Header("Trigger")]
         [Tooltip("Horizontal distance from her that starts the event.")]
@@ -48,7 +51,8 @@ namespace HangingWoman
         public float dragSpeed = 0.5f;
         [Tooltip("She stops this far from the player.")]
         public float stopDistance = 1.1f;
-        public float creakInterval = 2.6f;
+        [Tooltip("Seconds between extra creaks on top of the strain loop while she's dragged.")]
+        public float creakInterval = 3.5f;
         public float holdAtEnd = 3f;
         [Tooltip("Give control back afterwards. Turn off if the next beat takes over.")]
         public bool releaseControlAtEnd = true;
@@ -60,10 +64,13 @@ namespace HangingWoman
 
         public bool HasTriggered { get; private set; }
 
+        AudioSource strainSource;
+
         void Start()
         {
             if (player == null) player = FindFirstObjectByType<FirstPersonController>();
             if (creakClip == null) creakClip = ProceduralAudio.CreateRopeCreak();
+            if (strainLoop == null) strainLoop = ProceduralAudio.CreateRopeStrainLoop();
             if (creakSource == null)
             {
                 creakSource = gameObject.AddComponent<AudioSource>();
@@ -71,6 +78,19 @@ namespace HangingWoman
                 creakSource.minDistance = 2f;
             }
             creakSource.playOnAwake = false;
+            // The rope moves with her; Doppler would make it warble.
+            creakSource.dopplerLevel = 0f;
+            creakSource.priority = 32;
+
+            strainSource = creakSource.gameObject.AddComponent<AudioSource>();
+            strainSource.clip = strainLoop;
+            strainSource.loop = true;
+            strainSource.playOnAwake = false;
+            strainSource.volume = 0f;
+            strainSource.spatialBlend = creakSource.spatialBlend;
+            strainSource.minDistance = creakSource.minDistance;
+            strainSource.dopplerLevel = 0f;
+            strainSource.priority = 32;
         }
 
         void Update()
@@ -111,22 +131,33 @@ namespace HangingWoman
             yield return BackAway();
             yield return Hold(pauseBeforeDrag);
 
-            // The rope swings toward you and drags her after it.
+            // The rope swings toward you and drags her after it, straining the whole way.
             Creak(1f);
+            strainSource.volume = 0f;
+            strainSource.Play();
             StartCoroutine(ragdoll.DragTowards(player.transform.position, dragSpeed, stopDistance));
             float nextCreak = Time.time + creakInterval;
             while (ragdoll.IsDragging)
             {
                 TrackFace(3f);
+                strainSource.volume = Mathf.MoveTowards(strainSource.volume, strainVolume, Time.deltaTime * strainVolume / 1.2f);
                 if (Time.time >= nextCreak)
                 {
-                    Creak(Random.Range(0.5f, 0.85f));
-                    nextCreak = Time.time + creakInterval * Random.Range(0.7f, 1.3f);
+                    Creak(Random.Range(0.45f, 0.7f));
+                    nextCreak = Time.time + creakInterval * Random.Range(0.8f, 1.3f);
                 }
                 yield return null;
             }
             onArrived?.Invoke();
-            yield return Hold(holdAtEnd);
+
+            // Let the strain die away rather than cut off.
+            for (float e = 0f; e < holdAtEnd; e += Time.deltaTime)
+            {
+                TrackFace(3f);
+                strainSource.volume = Mathf.MoveTowards(strainSource.volume, 0f, Time.deltaTime * strainVolume / 1.5f);
+                yield return null;
+            }
+            strainSource.Stop();
 
             if (releaseControlAtEnd) player.InputLocked = false;
         }
