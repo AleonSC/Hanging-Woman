@@ -74,6 +74,8 @@ namespace HangingWoman
             get => pitch;
             set => pitch = Mathf.Clamp(value, -maxPitch, maxPitch);
         }
+        /// <summary>Moves the player by a world-space offset, with collision. For scripted moments.</summary>
+        public void ScriptedMove(Vector3 delta) => controller.Move(delta);
         public Vector3 EyePosition => playerCamera != null ? playerCamera.transform.position : transform.position + Vector3.up * standingEyeHeight;
         public bool IsCrouching => crouching;
         public bool IsGrounded => controller.isGrounded;

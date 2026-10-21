@@ -5,40 +5,58 @@ using UnityEngine.Events;
 namespace HangingWoman
 {
     /// <summary>
-    /// The scare at the end of the alley. When the player gets close, the camera is taken over
-    /// and tilts up the rope until she's out of frame. The rope creaks while she turns on it,
-    /// and when the camera comes back down she's hanging there facing you.
+    /// The scare at the end of the alley.
+    /// 1. Get close and the camera is taken over and tilts up the rope until she's out of frame.
+    /// 2. The rope creaks as it twists her around.
+    /// 3. The camera comes back down: she's facing you. You back away a few steps.
+    /// 4. The rope swings toward you, then drags her limp body after you, feet scraping
+    ///    through the blood, knocking over whatever is in the way.
     /// </summary>
     public class HangingWomanEvent : MonoBehaviour
     {
         [Header("References")]
         public FirstPersonController player;
-        public HangingBody body;
-        [Tooltip("Where the camera looks when it comes back down (her face).")]
+        public HangingRagdoll ragdoll;
+        [Tooltip("Where the camera looks once she's turned (her face).")]
         public Transform lookTarget;
         public AudioSource creakSource;
         [Tooltip("Leave empty to use a generated creak.")]
         public AudioClip creakClip;
 
         [Header("Trigger")]
-        [Tooltip("Horizontal distance from the body that starts the event.")]
+        [Tooltip("Horizontal distance from her that starts the event.")]
         public float triggerDistance = 3f;
 
-        [Header("Timing")]
+        [Header("Look up / turn / look down")]
         public float lookUpDuration = 2.4f;
-        [Tooltip("How far up the camera tilts. 90 = straight up.")]
         [Range(40f, 85f)] public float lookUpAngle = 78f;
         public float pauseBeforeCreak = 0.5f;
-        public float turnDuration = 1.6f;
+        public float turnDuration = 1.8f;
         public float holdAfterTurn = 0.7f;
         public float lookDownDuration = 2.0f;
-        public float holdOnReveal = 2.5f;
+
+        [Header("Back away")]
+        public float pauseBeforeBackingUp = 0.8f;
+        [Tooltip("Direction (flat) the player backs away in, from her toward the alley mouth.")]
+        public Vector3 retreatDirection = Vector3.right;
+        [Tooltip("How far from her the player ends up after backing away.")]
+        public float backUpTo = 4.6f;
+        public float backUpDuration = 1.8f;
+
+        [Header("Dragged toward you")]
+        public float pauseBeforeDrag = 1.2f;
+        public float dragSpeed = 0.5f;
+        [Tooltip("She stops this far from the player.")]
+        public float stopDistance = 1.1f;
+        public float creakInterval = 2.6f;
+        public float holdAtEnd = 3f;
         [Tooltip("Give control back afterwards. Turn off if the next beat takes over.")]
         public bool releaseControlAtEnd = true;
 
         [Header("Events")]
         public UnityEvent onTriggered;
         public UnityEvent onRevealed;
+        public UnityEvent onArrived;
 
         public bool HasTriggered { get; private set; }
 
@@ -57,8 +75,8 @@ namespace HangingWoman
 
         void Update()
         {
-            if (HasTriggered || player == null || body == null) return;
-            Vector3 offset = player.transform.position - body.transform.position;
+            if (HasTriggered || player == null || ragdoll == null) return;
+            Vector3 offset = player.transform.position - ragdoll.Position;
             offset.y = 0f;
             if (offset.magnitude <= triggerDistance) StartCoroutine(Sequence());
         }
@@ -76,22 +94,87 @@ namespace HangingWoman
             onTriggered?.Invoke();
 
             // Up the rope, which pushes her out the bottom of the frame.
-            float yawToHer = YawTowards(body.transform.position);
-            yield return Look(yawToHer, -lookUpAngle, lookUpDuration);
+            yield return Look(YawTowards(ragdoll.Position), -lookUpAngle, lookUpDuration);
             yield return new WaitForSeconds(pauseBeforeCreak);
 
-            // Out of sight, she turns on the rope.
-            if (creakClip != null) creakSource.PlayOneShot(creakClip, 0.8f);
-            yield return body.TurnToFace(player.EyePosition, turnDuration);
+            // Out of sight, the rope twists her around.
+            Creak(1f);
+            yield return ragdoll.TurnToFace(player.EyePosition, turnDuration);
             yield return new WaitForSeconds(holdAfterTurn);
 
             // Back down to her face.
-            Vector3 target = lookTarget != null ? lookTarget.position : body.transform.position;
-            yield return Look(YawTowards(target), PitchTowards(target), lookDownDuration);
+            yield return Look(YawTowards(Face), PitchTowards(Face), lookDownDuration);
             onRevealed?.Invoke();
-            yield return new WaitForSeconds(holdOnReveal);
+
+            // A few steps back, still staring at her.
+            yield return Hold(pauseBeforeBackingUp);
+            yield return BackAway();
+            yield return Hold(pauseBeforeDrag);
+
+            // The rope swings toward you and drags her after it.
+            Creak(1f);
+            StartCoroutine(ragdoll.DragTowards(player.transform.position, dragSpeed, stopDistance));
+            float nextCreak = Time.time + creakInterval;
+            while (ragdoll.IsDragging)
+            {
+                TrackFace(3f);
+                if (Time.time >= nextCreak)
+                {
+                    Creak(Random.Range(0.5f, 0.85f));
+                    nextCreak = Time.time + creakInterval * Random.Range(0.7f, 1.3f);
+                }
+                yield return null;
+            }
+            onArrived?.Invoke();
+            yield return Hold(holdAtEnd);
 
             if (releaseControlAtEnd) player.InputLocked = false;
+        }
+
+        Vector3 Face => lookTarget != null ? lookTarget.position : ragdoll.Position;
+
+        void Creak(float volume)
+        {
+            if (creakClip == null) return;
+            creakSource.pitch = Random.Range(0.85f, 1.1f);
+            creakSource.PlayOneShot(creakClip, volume);
+        }
+
+        IEnumerator BackAway()
+        {
+            Vector3 dir = retreatDirection;
+            dir.y = 0f;
+            dir = dir.sqrMagnitude > 0.0001f ? dir.normalized : Vector3.right;
+
+            Vector3 her = ragdoll.Position;
+            Vector3 start = player.transform.position;
+            Vector3 end = new Vector3(her.x, start.y, her.z) + dir * backUpTo;
+            for (float e = 0f; e < backUpDuration; e += Time.deltaTime)
+            {
+                Vector3 desired = Vector3.Lerp(start, end, Mathf.SmoothStep(0f, 1f, e / backUpDuration));
+                Vector3 delta = desired - player.transform.position;
+                delta.y = 0f;
+                player.ScriptedMove(delta);
+                TrackFace(4f);
+                yield return null;
+            }
+        }
+
+        /// <summary>Waits while keeping the camera on her face.</summary>
+        IEnumerator Hold(float seconds)
+        {
+            for (float e = 0f; e < seconds; e += Time.deltaTime)
+            {
+                TrackFace(3f);
+                yield return null;
+            }
+        }
+
+        void TrackFace(float sharpness)
+        {
+            float k = 1f - Mathf.Exp(-sharpness * Time.deltaTime);
+            player.Yaw = Mathf.LerpAngle(player.Yaw, YawTowards(Face), k);
+            player.Pitch = Mathf.Lerp(player.Pitch, PitchTowards(Face), k);
         }
 
         IEnumerator Look(float yaw, float pitch, float duration)

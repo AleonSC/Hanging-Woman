@@ -56,13 +56,18 @@ Gamepad works too if the project uses the new Input System.
 - **The alley:** on the left (west) side, about halfway down the street. It has a dumpster, trash bags, boxes, pipes and a buzzing caged wall lamp.
   `Alley Trigger` slows the player while they're inside and has `onPlayerEnter` /
   `onPlayerExit` UnityEvents to hook into.
-- **The hanging woman:** she hangs above the pool at the end of the trail, in a dirty white
-  dress, with long wet black hair and her back to you. She's completely limp: her head lolls,
-  her arms hang, her toes point at the ground, and she twists slowly on the rope. The rope rises
-  straight up until the fog swallows it. Get within 3 m and the camera takes over. It tilts
-  up the rope until she's out of frame, the rope creaks while she turns on it, and when the
-  camera comes back down she's facing you. Control returns after a few seconds. Timings,
-  trigger distance and `onTriggered` / `onRevealed` events are on `HangingWomanEvent`.
+- **The hanging woman:** she's a physics ragdoll in a dirty white dress, with long wet black
+  hair. She stands limp in the pool where the two trails end, held up by the neck on a rope that
+  rises until the fog swallows it, with her back to you. Get within 3 m and the camera takes over:
+  1. It tilts up the rope until she's out of frame.
+  2. The rope creaks and twists her around.
+  3. The camera comes back down: she's facing you, and you back away a few steps.
+  4. The top of the rope swings toward you, then drags her limp body after you, her feet
+     scraping fresh blood trails as she goes. She knocks over the garbage can and the
+     stacked boxes in her path, and stops just in front of you.
+
+  Timings, distances, drag speed and the `onTriggered` / `onRevealed` / `onArrived` events
+  are on `HangingWomanEvent`.
 
 ## Scripts
 
@@ -73,8 +78,10 @@ Gamepad works too if the project uses the new Input System.
 | `LightningStorm` | Random lightning flashes and delayed thunder. |
 | `LightFlicker` | Gentle, neon-buzz or broken flicker for lights, emissive surfaces and sign text. |
 | `AlleyTrigger` | Trigger volume that slows the player and fires events. |
-| `HangingWomanEvent` | The look-up / creak / look-down scare, driving the player's camera. |
-| `HangingBody` | Limp twisting and sway on the rope, and turning to face a point. |
+| `HangingWomanEvent` | The scare sequence, driving the player's camera. |
+| `HangingRagdoll` | Moves the rope's anchor to turn and drag the ragdoll, and draws the rope. |
+| `FootBloodTrail` | Leaves blood smears wherever a foot drags along the ground. |
+| `Billboard` | Turns lamp glows toward the camera. |
 | `ProceduralAudio` | Generates the rain, thunder, footstep and rope-creak sounds, so no audio files are needed. Assign real clips in the inspector to replace them. |
 | `QualityBootstrap` | Raises the per-pixel light count, since the built-in pipeline only allows a few by default. |
 | `Editor/NightStreetSceneBuilder` | Builds and saves the whole scene. |

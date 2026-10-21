@@ -28,7 +28,7 @@ namespace HangingWoman.EditorTools
         const string SceneDir = Root + "/Scenes";
         public const string ScenePath = SceneDir + "/NightStreet.unity";
         /// <summary>Bump whenever the builder changes what it builds, so stale scenes get rebuilt.</summary>
-        public const int SceneVersion = 7;
+        public const int SceneVersion = 8;
         public static string VersionKey => "HangingWoman.SceneVersion." + Application.dataPath;
         public static bool SceneIsCurrent => File.Exists(ScenePath) && EditorPrefs.GetInt(VersionKey, 0) == SceneVersion;
 
@@ -698,38 +698,59 @@ namespace HangingWoman.EditorTools
 
         const float RopeHeight = 140f;
 
+        /// <summary>Where the parallel trails end; she stands in the pool there.</summary>
+        static Vector3 TrailEnd => new Vector3(AX(26.0f), SidewalkTop, AlleyZMin + 3.5f);
+
+        /// <summary>Flat direction from the back of the alley toward its mouth.</summary>
+        static Vector3 TowardAlleyMouth => new Vector3(-AlleySide, 0f, 0f);
+
         static void BuildHangingWoman(FirstPersonController player)
         {
-            // Hangs over the pool at the end of the trail, toes half a metre off the ground,
-            // back turned to the alley mouth (facing the back wall).
-            const float neckToToes = 1.42f;
-            var neck = new Vector3(AX(25.7f), SidewalkTop + 0.5f + neckToToes, AlleyZMin + 3.2f);
-
             var root = new GameObject("Hanging Woman").transform;
-            root.position = neck;
+            var groundPoint = TrailEnd;
 
-            var bodyT = Group("Body", root);
-            bodyT.rotation = Quaternion.Euler(0f, AlleySide * 90f, 0f);
-            var body = bodyT.gameObject.AddComponent<HangingBody>();
-            var blocker = bodyT.gameObject.AddComponent<CapsuleCollider>();
-            blocker.center = new Vector3(0f, -0.7f, 0f);
-            blocker.height = 1.6f;
-            blocker.radius = 0.22f;
+            // A ragdoll of linked rigidbodies. Bones are placed for a woman standing upright,
+            // feet just touching the ground, facing away from the alley mouth.
+            var ragdoll = Group("Ragdoll", root);
+            // Soles rest right on the ground (the rope holds her at standing height).
+            ragdoll.position = groundPoint + Vector3.up * -0.01f;
+            ragdoll.rotation = Quaternion.Euler(0f, AlleySide * 90f, 0f);
 
-            // Head lolls forward and over to one side, the way a noose leaves it.
-            var head = Group("Head", bodyT);
-            head.localPosition = new Vector3(0f, 0.02f, 0f);
-            head.localRotation = Quaternion.Euler(20f, 0f, 24f);
-            Part(PrimitiveType.Sphere, "Skull", head, new Vector3(0f, 0.12f, 0.015f), new Vector3(0.18f, 0.22f, 0.2f), skin);
-            Part(PrimitiveType.Sphere, "Hair Cap", head, new Vector3(0f, 0.15f, -0.028f), new Vector3(0.192f, 0.225f, 0.192f), hair);
-            Part(PrimitiveType.Sphere, "Eye Socket L", head, new Vector3(-0.038f, 0.13f, 0.098f), new Vector3(0.042f, 0.03f, 0.03f), socket);
-            Part(PrimitiveType.Sphere, "Eye Socket R", head, new Vector3(0.038f, 0.13f, 0.098f), new Vector3(0.042f, 0.03f, 0.03f), socket);
-            Part(PrimitiveType.Sphere, "Mouth", head, new Vector3(0.004f, 0.055f, 0.093f), new Vector3(0.04f, 0.022f, 0.02f), socket);
-            var face = Group("Face (Look Target)", head);
+            // Pelvis and chest.
+            var pelvis = Bone("Pelvis", ragdoll, new Vector3(0f, 0.92f, 0f), 10f);
+            BoxCol(pelvis, Vector3.zero, new Vector3(0.3f, 0.2f, 0.2f));
+            Part(PrimitiveType.Capsule, "Hips", pelvis.transform, new Vector3(0f, 0.0f, 0f), new Vector3(0.29f, 0.15f, 0.2f), dress, new Vector3(0f, 0f, 90f));
+            var skirt = new GameObject("Skirt");
+            skirt.transform.SetParent(pelvis.transform, false);
+            skirt.transform.localPosition = new Vector3(0f, 0.07f, 0f);
+            skirt.AddComponent<MeshFilter>().sharedMesh = SaveMesh("Dress Skirt", SkirtMesh(0.15f, 0.29f, 0.72f, 30, 7, 5));
+            skirt.AddComponent<MeshRenderer>().sharedMaterial = dress;
+
+            var chest = Bone("Chest", pelvis.transform, new Vector3(0f, 0.08f, 0f), 12f);
+            BoxCol(chest, new Vector3(0f, 0.21f, 0f), new Vector3(0.3f, 0.42f, 0.19f));
+            Limb(chest, pelvis, -20f, 25f, 15f, 10f);
+            Part(PrimitiveType.Capsule, "Torso", chest.transform, new Vector3(0f, 0.15f, 0.005f), new Vector3(0.3f, 0.24f, 0.19f), dress);
+            Part(PrimitiveType.Cylinder, "Neck", chest.transform, new Vector3(0f, 0.4f, 0f), new Vector3(0.075f, 0.05f, 0.075f), skin);
+
+            // Head, lolling forward and to one side.
+            var head = Bone("Head", chest.transform, new Vector3(0f, 0.42f, 0f), 4f);
+            head.transform.localRotation = Quaternion.Euler(20f, 0f, 24f);
+            var skullCol = head.gameObject.AddComponent<SphereCollider>();
+            skullCol.center = new Vector3(0f, 0.12f, 0.015f);
+            skullCol.radius = 0.1f;
+            Limb(head, chest, -40f, 45f, 35f, 25f);
+            Part(PrimitiveType.Sphere, "Skull", head.transform, new Vector3(0f, 0.12f, 0.015f), new Vector3(0.18f, 0.22f, 0.2f), skin);
+            Part(PrimitiveType.Sphere, "Hair Cap", head.transform, new Vector3(0f, 0.15f, -0.028f), new Vector3(0.192f, 0.225f, 0.192f), hair);
+            Part(PrimitiveType.Sphere, "Eye Socket L", head.transform, new Vector3(-0.038f, 0.13f, 0.098f), new Vector3(0.042f, 0.03f, 0.03f), socket);
+            Part(PrimitiveType.Sphere, "Eye Socket R", head.transform, new Vector3(0.038f, 0.13f, 0.098f), new Vector3(0.042f, 0.03f, 0.03f), socket);
+            Part(PrimitiveType.Sphere, "Mouth", head.transform, new Vector3(0.004f, 0.055f, 0.093f), new Vector3(0.04f, 0.022f, 0.02f), socket);
+            var face = Group("Face (Look Target)", head.transform);
             face.localPosition = new Vector3(0f, 0.11f, 0.1f);
 
-            // Long hair hangs straight down, so it lives on the body rather than the tilted head.
-            var hairRoot = Group("Hair", bodyT);
+            // Long hair hangs down her back and in front of her face. It's attached to the
+            // chest rather than the lolling head so it keeps hanging straight down.
+            var hairRoot = Group("Hair", chest.transform);
+            hairRoot.localPosition = new Vector3(0f, 0.42f, 0f);
             Part(PrimitiveType.Cube, "Hair Back", hairRoot, new Vector3(-0.035f, -0.12f, -0.095f), new Vector3(0.22f, 0.62f, 0.03f), hair);
             for (int i = 0; i < 12; i++)
             {
@@ -740,70 +761,195 @@ namespace HangingWoman.EditorTools
             }
             foreach (float x in new[] { -0.15f, 0.07f })
             {
-                // Over the shoulders.
                 float length = R(0.45f, 0.6f);
                 Part(PrimitiveType.Cube, "Strand Side", hairRoot, new Vector3(x, 0.15f - length * 0.5f, R(0.0f, 0.05f)),
                     new Vector3(0.035f, length, 0.03f), hair, new Vector3(0f, R(-10f, 10f), 0f));
             }
-            // Hanging in front of the face, with a gap she looks through.
-            float[] front = { -0.13f, -0.1f, -0.065f, 0.0f, 0.03f };
-            foreach (float x in front)
+            foreach (float x in new[] { -0.13f, -0.1f, -0.065f, 0.0f, 0.03f })
             {
                 float length = R(0.42f, 0.6f);
                 Part(PrimitiveType.Cube, "Strand Front", hairRoot, new Vector3(x, 0.18f - length * 0.5f, R(0.18f, 0.2f)),
                     new Vector3(R(0.022f, 0.04f), length, 0.01f), hair, new Vector3(R(-4f, 4f), R(-12f, 12f), R(-3f, 3f)));
             }
 
-            Part(PrimitiveType.Cylinder, "Neck", bodyT, new Vector3(0f, -0.02f, 0f), new Vector3(0.075f, 0.05f, 0.075f), skin);
-            Part(PrimitiveType.Capsule, "Torso", bodyT, new Vector3(0f, -0.27f, 0.005f), new Vector3(0.3f, 0.24f, 0.19f), dress);
-            Part(PrimitiveType.Capsule, "Hips", bodyT, new Vector3(0f, -0.5f, 0f), new Vector3(0.29f, 0.15f, 0.2f), dress, new Vector3(0f, 0f, 90f));
-
-            var skirt = new GameObject("Skirt");
-            skirt.transform.SetParent(bodyT, false);
-            skirt.transform.localPosition = new Vector3(0f, -0.43f, 0f);
-            skirt.AddComponent<MeshFilter>().sharedMesh = SaveMesh("Dress Skirt", SkirtMesh(0.15f, 0.29f, 0.72f, 30, 7, 5));
-            skirt.AddComponent<MeshRenderer>().sharedMaterial = dress;
-
+            // Arms and legs.
+            var feet = new List<Rigidbody>();
             foreach (int s in new[] { -1, 1 })
             {
-                string sideName = s < 0 ? "R" : "L";
-                Part(PrimitiveType.Cylinder, "Sleeve " + sideName, bodyT, new Vector3(s * 0.165f, -0.11f, 0f), new Vector3(0.09f, 0.05f, 0.09f), dress, new Vector3(0f, 0f, s * 6f));
-                Part(PrimitiveType.Capsule, "Upper Arm " + sideName, bodyT, new Vector3(s * 0.175f, -0.21f, 0f), new Vector3(0.07f, 0.15f, 0.07f), skin, new Vector3(-3f, 0f, s * 4f));
-                Part(PrimitiveType.Capsule, "Forearm " + sideName, bodyT, new Vector3(s * 0.19f, -0.48f, 0.02f), new Vector3(0.06f, 0.14f, 0.06f), skin, new Vector3(-6f, 0f, s * 2f));
-                Part(PrimitiveType.Sphere, "Hand " + sideName, bodyT, new Vector3(s * 0.195f, -0.68f, 0.035f), new Vector3(0.055f, 0.11f, 0.035f), skin, new Vector3(-8f, s * 15f, 0f));
+                string n = s < 0 ? "R" : "L";
+                Part(PrimitiveType.Cylinder, "Sleeve " + n, chest.transform, new Vector3(s * 0.165f, 0.31f, 0f), new Vector3(0.09f, 0.05f, 0.09f), dress, new Vector3(0f, 0f, s * 6f));
 
-                // One leg hangs slightly bent; toes point at the ground.
-                float bend = s < 0 ? 6f : -2f;
-                Part(PrimitiveType.Capsule, "Thigh " + sideName, bodyT, new Vector3(s * 0.07f, -0.76f, 0f), new Vector3(0.1f, 0.2f, 0.1f), skin);
-                Part(PrimitiveType.Capsule, "Calf " + sideName, bodyT, new Vector3(s * 0.07f, -1.12f, 0.01f), new Vector3(0.07f, 0.15f, 0.07f), skin, new Vector3(bend, 0f, 0f));
-                Part(PrimitiveType.Cube, "Foot " + sideName, bodyT, new Vector3(s * 0.07f, -1.34f, 0.025f), new Vector3(0.065f, 0.16f, 0.08f), skin, new Vector3(12f + bend, s * 5f, 0f));
+                var upperArm = Bone("Upper Arm " + n, chest.transform, new Vector3(s * 0.175f, 0.36f, 0f), 2f);
+                CapsuleCol(upperArm, new Vector3(0f, -0.14f, 0f), 0.04f, 0.3f);
+                Limb(upperArm, chest, -70f, 40f, 50f, 20f);
+                Part(PrimitiveType.Capsule, "Upper Arm", upperArm.transform, new Vector3(0f, -0.14f, 0f), new Vector3(0.07f, 0.15f, 0.07f), skin);
+
+                var forearm = Bone("Forearm " + n, upperArm.transform, new Vector3(s * 0.01f, -0.29f, 0f), 1.5f);
+                CapsuleCol(forearm, new Vector3(0f, -0.17f, 0.01f), 0.035f, 0.36f);
+                Limb(forearm, upperArm, -110f, 3f, 10f, 10f);
+                Part(PrimitiveType.Capsule, "Forearm", forearm.transform, new Vector3(0f, -0.13f, 0.01f), new Vector3(0.06f, 0.14f, 0.06f), skin);
+                Part(PrimitiveType.Sphere, "Hand", forearm.transform, new Vector3(0f, -0.33f, 0.02f), new Vector3(0.055f, 0.11f, 0.035f), skin, new Vector3(-8f, s * 15f, 0f));
+
+                var thigh = Bone("Thigh " + n, pelvis.transform, new Vector3(s * 0.08f, -0.02f, 0f), 6f);
+                CapsuleCol(thigh, new Vector3(0f, -0.21f, 0f), 0.06f, 0.46f);
+                Limb(thigh, pelvis, -90f, 20f, 20f, 10f);
+                Part(PrimitiveType.Capsule, "Thigh", thigh.transform, new Vector3(0f, -0.21f, 0f), new Vector3(0.1f, 0.21f, 0.1f), skin);
+
+                var calf = Bone("Calf " + n, thigh.transform, new Vector3(0f, -0.42f, 0f), 3.5f);
+                CapsuleCol(calf, new Vector3(0f, -0.2f, 0f), 0.045f, 0.42f);
+                BoxCol(calf, new Vector3(0f, -0.445f, 0.05f), new Vector3(0.07f, 0.05f, 0.2f));
+                Limb(calf, thigh, -3f, 120f, 5f, 5f);
+                Part(PrimitiveType.Capsule, "Calf", calf.transform, new Vector3(0f, -0.2f, 0f), new Vector3(0.07f, 0.2f, 0.07f), skin);
+                Part(PrimitiveType.Cube, "Foot", calf.transform, new Vector3(0f, -0.445f, 0.05f), new Vector3(0.065f, 0.05f, 0.19f), skin);
+
+                var trail = calf.gameObject.AddComponent<FootBloodTrail>();
+                trail.smearMaterial = bloodSmear;
+                trail.groundHeight = SidewalkTop;
+                trail.soleLocalPoint = new Vector3(0f, -0.465f, 0.05f);
+                feet.Add(calf);
             }
 
-            // Noose: a ring around the neck, a knot behind one ear, and the rope straight up.
+            // Noose and knot ride on the chest; the rope leaves the knot behind one ear.
             var noose = new GameObject("Noose");
-            noose.transform.SetParent(bodyT, false);
-            noose.transform.localPosition = new Vector3(0f, 0.0f, -0.005f);
+            noose.transform.SetParent(chest.transform, false);
+            noose.transform.localPosition = new Vector3(0f, 0.42f, -0.005f);
             noose.transform.localRotation = Quaternion.Euler(-14f, 0f, 0f);
             noose.AddComponent<MeshFilter>().sharedMesh = SaveMesh("Noose Ring", TorusMesh(0.052f, 0.014f, 24, 8));
             noose.AddComponent<MeshRenderer>().sharedMaterial = ropeKnot;
+            var knot = Group("Rope Attach", chest.transform);
+            knot.localPosition = new Vector3(0.035f, 0.47f, -0.075f);
+            Part(PrimitiveType.Cylinder, "Knot", knot, Vector3.zero, new Vector3(0.04f, 0.055f, 0.04f), ropeKnot);
 
-            var knotPos = new Vector3(0.035f, 0.05f, -0.075f);
-            Part(PrimitiveType.Cylinder, "Knot", bodyT, knotPos, new Vector3(0.04f, 0.055f, 0.04f), ropeKnot);
-            // The rope rises straight up until the fog swallows it.
-            Part(PrimitiveType.Cylinder, "Rope", bodyT, knotPos + Vector3.up * (RopeHeight * 0.5f), new Vector3(0.024f, RopeHeight * 0.5f, 0.024f), rope);
+            // The end of the rope is a kinematic body. The chest hangs from it by the knot:
+            // free to swing like a pendulum, but not to spin, so twisting the rope turns her.
+            var anchorGo = new GameObject("Rope Anchor");
+            anchorGo.transform.SetParent(root, false);
+            anchorGo.transform.SetPositionAndRotation(knot.position, ragdoll.rotation);
+            var anchor = anchorGo.AddComponent<Rigidbody>();
+            anchor.isKinematic = true;
+            anchor.interpolation = RigidbodyInterpolation.Interpolate;
+
+            var neckJoint = chest.gameObject.AddComponent<ConfigurableJoint>();
+            neckJoint.connectedBody = anchor;
+            neckJoint.autoConfigureConnectedAnchor = false;
+            neckJoint.anchor = knot.localPosition;
+            neckJoint.connectedAnchor = Vector3.zero;
+            neckJoint.axis = Vector3.up;
+            neckJoint.secondaryAxis = Vector3.forward;
+            neckJoint.xMotion = neckJoint.yMotion = neckJoint.zMotion = ConfigurableJointMotion.Locked;
+            neckJoint.angularXMotion = ConfigurableJointMotion.Locked;
+            neckJoint.angularYMotion = neckJoint.angularZMotion = ConfigurableJointMotion.Limited;
+            neckJoint.angularYLimit = new SoftJointLimit { limit = 60f };
+            neckJoint.angularZLimit = new SoftJointLimit { limit = 60f };
+            neckJoint.projectionMode = JointProjectionMode.PositionAndRotation;
+
+            // The rope itself is redrawn every frame from the knot up into the sky.
+            var ropeVisual = Part(PrimitiveType.Cylinder, "Rope", root, knot.position + Vector3.up * (RopeHeight - knot.position.y) * 0.5f,
+                new Vector3(0.024f, (RopeHeight - knot.position.y) * 0.5f, 0.024f), rope);
+
+            var hanging = root.gameObject.AddComponent<HangingRagdoll>();
+            hanging.anchor = anchor;
+            hanging.chest = chest;
+            hanging.head = head.transform;
+            hanging.ropeAttach = knot;
+            hanging.ropeVisual = ropeVisual.transform;
+            hanging.ropeTopHeight = RopeHeight;
 
             var creak = new GameObject("Creak").AddComponent<AudioSource>();
-            creak.transform.SetParent(bodyT, false);
-            creak.transform.localPosition = new Vector3(0f, 0.3f, 0f);
+            creak.transform.SetParent(knot, false);
             creak.spatialBlend = 0.7f;
             creak.minDistance = 2f;
             creak.playOnAwake = false;
 
             var ev = root.gameObject.AddComponent<HangingWomanEvent>();
             ev.player = player;
-            ev.body = body;
+            ev.ragdoll = hanging;
             ev.lookTarget = face;
             ev.creakSource = creak;
+            ev.retreatDirection = TowardAlleyMouth;
+
+            // Kept outside her hierarchy: the ragdoll ignores collisions with its own children.
+            BuildKnockableProps(Group("Props In Her Path", null), groundPoint);
+        }
+
+        /// <summary>A garbage can and a stack of boxes between her and the alley mouth, loose so she knocks them over.</summary>
+        static void BuildKnockableProps(Transform parent, Vector3 her)
+        {
+            Vector3 along = TowardAlleyMouth;
+            Vector3 side = new Vector3(0f, 0f, 1f);
+
+            var canMat = Mat("Trash Can", new Color(0.12f, 0.13f, 0.12f), 0.6f, 0.7f);
+            Vector3 canPos = her + along * 1.35f - side * 0.3f;
+            Dynamic(ConvexCylinder("Garbage Can", parent, canPos + Vector3.up * 0.45f, new Vector3(0.55f, 0.45f, 0.55f), canMat), 6f);
+            Dynamic(ConvexCylinder("Garbage Can Lid", parent, canPos + Vector3.up * 0.925f, new Vector3(0.6f, 0.02f, 0.6f), canMat), 0.8f);
+
+            Vector3 stack = her + along * 2.05f + side * 0.35f;
+            Dynamic(Box("Box", parent, stack + Vector3.up * 0.25f, new Vector3(0.55f, 0.5f, 0.5f), cardboard, euler: new Vector3(0f, 8f, 0f)), 2f);
+            Dynamic(Box("Box", parent, stack + Vector3.up * 0.71f + along * 0.04f, new Vector3(0.45f, 0.42f, 0.42f), cardboard, euler: new Vector3(0f, -14f, 0f)), 1.5f);
+            Dynamic(Box("Box", parent, stack + Vector3.up * 1.07f - along * 0.03f, new Vector3(0.36f, 0.3f, 0.34f), cardboard, euler: new Vector3(0f, 25f, 0f)), 1f);
+            Dynamic(Box("Box", parent, stack - side * 0.55f + along * 0.1f + Vector3.up * 0.2f, new Vector3(0.4f, 0.4f, 0.4f), cardboard, euler: new Vector3(0f, -30f, 0f)), 1.2f);
+        }
+
+        /// <summary>A cylinder with a true cylinder-shaped collider (the default capsule rolls, or turns into a ball when flat).</summary>
+        static GameObject ConvexCylinder(string name, Transform parent, Vector3 pos, Vector3 scale, Material m)
+        {
+            var go = Prim(PrimitiveType.Cylinder, name, parent, pos, scale, m, collider: false);
+            var col = go.AddComponent<MeshCollider>();
+            col.sharedMesh = go.GetComponent<MeshFilter>().sharedMesh;
+            col.convex = true;
+            return go;
+        }
+
+        static void Dynamic(GameObject go, float mass)
+        {
+            var rb = go.AddComponent<Rigidbody>();
+            rb.mass = mass;
+            rb.interpolation = RigidbodyInterpolation.Interpolate;
+        }
+
+        static Rigidbody Bone(string name, Transform parent, Vector3 localPos, float mass)
+        {
+            var t = Group(name, parent);
+            t.localPosition = localPos;
+            var rb = t.gameObject.AddComponent<Rigidbody>();
+            rb.mass = mass;
+            rb.interpolation = RigidbodyInterpolation.Interpolate;
+            return rb;
+        }
+
+        static void BoxCol(Rigidbody bone, Vector3 center, Vector3 size)
+        {
+            var c = bone.gameObject.AddComponent<BoxCollider>();
+            c.center = center;
+            c.size = size;
+        }
+
+        static void CapsuleCol(Rigidbody bone, Vector3 center, float radius, float height)
+        {
+            var c = bone.gameObject.AddComponent<CapsuleCollider>();
+            c.center = center;
+            c.radius = radius;
+            c.height = height;
+            c.direction = 1;
+        }
+
+        /// <summary>
+        /// Joint to the parent bone. Twist is about the bone's local X (bending forward/back);
+        /// the swing limits allow some sideways flop.
+        /// </summary>
+        static void Limb(Rigidbody bone, Rigidbody parent, float lowTwist, float highTwist, float swing1, float swing2)
+        {
+            var j = bone.gameObject.AddComponent<CharacterJoint>();
+            j.connectedBody = parent;
+            j.anchor = Vector3.zero;
+            j.axis = Vector3.right;
+            j.swingAxis = Vector3.forward;
+            j.lowTwistLimit = new SoftJointLimit { limit = lowTwist };
+            j.highTwistLimit = new SoftJointLimit { limit = highTwist };
+            j.swing1Limit = new SoftJointLimit { limit = swing1 };
+            j.swing2Limit = new SoftJointLimit { limit = swing2 };
+            j.enableProjection = true;
+            j.enablePreprocessing = false;
         }
 
         /// <summary>A collider-less, shadow-casting body part.</summary>
